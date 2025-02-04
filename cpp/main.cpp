@@ -9,10 +9,6 @@
 #include <memory>
 #include <boost/program_options.hpp>
 
-// Constants
-//constexpr size_t SHARE_BYTE_COUNT = 5;
-
-// ApproximateMpsi placeholder (assumes the class from the previous translation)
 #include "approx_mpsi.hpp"
 
 // Command-line options
@@ -39,7 +35,7 @@ std::optional<Options> parse_options(int argc, char* argv[]) {
         ("set-size,k", po::value<size_t>(&options.set_size)->required(), "Size of each set")
         ("domain-size,u", po::value<size_t>(&options.domain_size)->required(), "Size of the domain")
         ("bin-count,m", po::value<size_t>(&options.bin_count)->required(), "Number of bins")
-        ("hash-count,h", po::value<size_t>(&options.hash_count)->required(), "Number of hash functions")
+        ("hash-count,s", po::value<size_t>(&options.hash_count)->required(), "Number of hash functions")
         ("latency,l", po::value<double>(&options.latency)->default_value(0.0), "Network latency in seconds")
         ("bytes-per-sec,b", po::value<double>(&options.bytes_per_sec)->default_value(0.0), "Bandwidth in bytes per second")
         ("repetitions,r", po::value<size_t>(&options.repetitions)->required(), "Number of repetitions")
@@ -82,14 +78,17 @@ int main(int argc, char* argv[]) {
               << "  Results Filename: " << options.results_filename << "\n";
 
     // Initialize the network description
-    FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
-                                       ? FullMesh::new_default()
-                                       : FullMesh::new_with_overhead(options.latency, options.bytes_per_sec);
+    //FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
+      //                                 ? FullMesh::new_default()
+        //                               : FullMesh::new_with_overhead(options.latency, options.bytes_per_sec);
 
+    FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
+                                        ? FullMesh::new_default()
+                                        : FullMesh(options.latency, options.bytes_per_sec, options.party_count);
     // Run the protocol
     ApproximateMpsi protocol(options.bin_count, options.hash_count, options.domain_size, options.set_size);
     Stats stats = protocol.evaluate(
-        "Experiment", options.party_count, network_description, options.repetitions);
+        "Experiment", options.party_count, network_description, options.repetitions, options.results_filename);
 
     // Output results
     stats.output_party_csv(1, options.results_filename);

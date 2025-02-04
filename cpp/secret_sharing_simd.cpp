@@ -3,69 +3,80 @@
 #include <cstdint>
 #include <random>
 #include <algorithm>
-#include <emmintrin.h> // SSE2 intrinsics
-#include <smmintrin.h> // SSE4.1 intrinsics (for blendv)
 #include "blake3.h" // Include BLAKE3 library for hashing
+#include "secret_sharing_simd.hpp"
 
 // Constants
 constexpr size_t SHARE_BYTE_COUNT = 64;
 
 // Helper Struct for SIMD Bytes
-struct SimdBytes {
-    std::vector<std::array<__m128i, 4>> bytes; // Each 512-bit chunk is split into 4x128-bit chunks
+SimdBytes SimdBytes::from_bytes(const std::vector<uint8_t>& data) {
+    SimdBytes simdBytes;
+    size_t chunk_count = data.size() / SHARE_BYTE_COUNT;
 
-    // Convert raw bytes into SimdBytes
-    static SimdBytes from_bytes(const std::vector<uint8_t>& data) {
-        SimdBytes simdBytes;
-        size_t chunk_count = data.size() / SHARE_BYTE_COUNT;
-
-        simdBytes.bytes.resize(chunk_count);
-        for (size_t i = 0; i < chunk_count; ++i) {
-            for (size_t j = 0; j < 4; ++j) {
-                simdBytes.bytes[i][j] = _mm_loadu_si128(
-                    reinterpret_cast<const __m128i*>(&data[i * SHARE_BYTE_COUNT + j * 16]));
-            }
+    simdBytes.bytes.resize(chunk_count);
+    for (size_t i = 0; i < chunk_count; ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            simdBytes.bytes[i][j] = _mm_loadu_si128(
+                reinterpret_cast<const __m128i*>(&data[i * SHARE_BYTE_COUNT + j * 16]));
         }
-        return simdBytes;
+    }
+    return simdBytes;
+}
+
+// Convert SimdBytes back to raw bytes
+std::vector<uint8_t> SimdBytes::to_bytes() const {
+    std::vector<uint8_t> result(bytes.size() * SHARE_BYTE_COUNT);
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            _mm_storeu_si128(
+                reinterpret_cast<__m128i*>(&result[i * SHARE_BYTE_COUNT + j * 16]),
+                bytes[i][j]);
+        }
+    }
+    return result;
+}
+
+// XOR operation for SimdBytes
+SimdBytes& SimdBytes::operator^=(const SimdBytes& rhs) {
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            bytes[i][j] = _mm_xor_si128(bytes[i][j], rhs.bytes[i][j]);
+        }
+    }
+    return *this;
+}
+
+// Conditional selection
+SimdBytes SimdBytes::select( const std::vector<std::array<__m128i, 4>>& masks, const SimdBytes& true_values, const SimdBytes& false_values) {
+    SimdBytes result;
+    result.bytes.resize(masks.size());
+
+    for (size_t i = 0; i < masks.size(); ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            result.bytes[i][j] = _mm_blendv_epi8(
+                false_values.bytes[i][j], true_values.bytes[i][j], masks[i][j]);
+        }
+    }
+    return result;
+}
+
+// Convert SimdBytes into byte chunks
+/*template <const size_t ChunkSize>
+    std::vector<std::array<uint8_t, ChunkSize>> SimdBytes::to_byte_chunks() const {
+    std::vector<std::array<uint8_t, ChunkSize>> result;
+    result.reserve(bytes.size());
+
+    for (const auto& chunk : bytes) {
+        std::array<uint8_t, ChunkSize> byte_chunk;
+        for (size_t i = 0; i < 4; ++i) {
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&byte_chunk[i * 16]), chunk[i]);
+        }
+        result.push_back(byte_chunk);
     }
 
-    // Convert SimdBytes back to raw bytes
-    std::vector<uint8_t> to_bytes() const {
-        std::vector<uint8_t> result(bytes.size() * SHARE_BYTE_COUNT);
-        for (size_t i = 0; i < bytes.size(); ++i) {
-            for (size_t j = 0; j < 4; ++j) {
-                _mm_storeu_si128(
-                    reinterpret_cast<__m128i*>(&result[i * SHARE_BYTE_COUNT + j * 16]),
-                    bytes[i][j]);
-            }
-        }
-        return result;
-    }
-
-    // XOR operation for SimdBytes
-    SimdBytes& operator^=(const SimdBytes& rhs) {
-        for (size_t i = 0; i < bytes.size(); ++i) {
-            for (size_t j = 0; j < 4; ++j) {
-                bytes[i][j] = _mm_xor_si128(bytes[i][j], rhs.bytes[i][j]);
-            }
-        }
-        return *this;
-    }
-
-    // Conditional selection
-    static SimdBytes select( const std::vector<std::array<__m128i, 4>>& masks, const SimdBytes& true_values, const SimdBytes& false_values) {
-        SimdBytes result;
-        result.bytes.resize(masks.size());
-
-        for (size_t i = 0; i < masks.size(); ++i) {
-            for (size_t j = 0; j < 4; ++j) {
-                result.bytes[i][j] = _mm_blendv_epi8(
-                    false_values.bytes[i][j], true_values.bytes[i][j], masks[i][j]);
-            }
-        }
-        return result;
-    }
-};
+    return result;
+}*/
 
 // Blake3-like Hash Expansion (placeholder for actual hashing)
 //SimdBytes xof(const std::vector<uint8_t>& seed, size_t byte_count) {
