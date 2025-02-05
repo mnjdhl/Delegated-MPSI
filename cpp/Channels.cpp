@@ -39,7 +39,7 @@ void Channels::receive(int from, std::vector<std::vector<size_t>>& data) {
     raw_bytes = receive(from);
 
     std::istringstream iss(std::string(raw_bytes.begin(), raw_bytes.end()));
-    size_t outer_size;
+    size_t outer_size = 0;
     iss.read(reinterpret_cast<char*>(&outer_size), sizeof(size_t));
 
     data.resize(outer_size);

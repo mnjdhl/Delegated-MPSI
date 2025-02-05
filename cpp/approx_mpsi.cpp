@@ -104,6 +104,7 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_part
     party_seeds.insert(party_seeds.begin(), {});
 
     std::vector<std::unique_ptr<Party>> parties;
+    parties.reserve(n_parties);
     for (const auto& seeds : party_seeds) {
         parties.push_back(std::make_unique<ApproximateMpsiParty>(seeds, bin_count, hash_count));
     }
@@ -239,9 +240,13 @@ Stats ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party
         auto parties = setup_parties(party_count);
 
         // Step 4: Run protocol for all parties
-        std::vector<std::optional<Set>> outputs(party_count);
-        for (size_t id = 0; id < party_count; ++id) {
-            outputs[id] = parties[id]->run(id, party_count, inputs[id], network.get_channels(id), stats);
+        std::vector<std::optional<Set>> outputs;
+        outputs.reserve(parties.size());
+        /* for (size_t id = 0; id < party_count; id++) { */
+        for (size_t id = 0; id < party_count-1; id++) { //TBD:Is this okay??
+            if (parties[id] == nullptr) continue;  // Skip parties that are not part of the protocol
+            auto out = parties[id]->run(id, party_count, inputs[id], network.get_channels(id), stats);
+            outputs.push_back(std::move(out));
         }
 
         // Step 5: Validate outputs
@@ -478,12 +483,19 @@ void ApproximateMpsiParty::run_client_approx(const Set& input, Channels& channel
 
 std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const Input& input, Channels& channels, Stats& stats) {
     Set output;
-    if (id == 0) {
-        run_server_approx(n_parties, channels, stats);
-    } else if (id == 1) {
-        output = run_querier_approx(*input, channels, stats);
-    } else {
-        run_client_approx(*input, channels, stats);
+    switch(id) {
+        case 0:
+            run_server_approx(n_parties, channels, stats);
+            break;
+
+        case 1:
+            output = run_querier_approx(*input, channels, stats);
+            break;
+
+        default:
+            run_client_approx(*input, channels, stats);
+            break;
+        
     }
     return output;
 }
