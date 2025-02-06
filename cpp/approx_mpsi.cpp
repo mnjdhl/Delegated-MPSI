@@ -13,74 +13,15 @@
 #include <memory>
 #include "approx_mpsi.hpp"
 
-/* Method Definitions for 'Set' class */
-Set::Set() = default;
-
-Set::Set(std::initializer_list<size_t> init) : elements(init) {}
-
-Set::Set(std::unordered_set<size_t> elems) : elements(std::move(elems)) {}
-
-Set Set::intersection(const std::vector<Set>& sets) {
-    if (sets.empty()) return {};
-    Set result = sets.front();
-    for (const auto& set : sets) {
-        std::unordered_set<size_t> temp;
-        for (size_t elem : result.elements) {
-            if (set.elements.count(elem)) temp.insert(elem);
-        }
-        result.elements = std::move(temp);
-    }
-    return result;
-}
-
-std::vector<size_t> Set::to_vector() const {
-    return {elements.begin(), elements.end()};
-}
-
-bool Set::operator==(const Set& other) const {
-    return elements == other.elements;
-}
-
-std::unordered_set<size_t> Set::get_elements() const {
-    return elements;
-}
-
-std::vector<size_t> Set::bloom_filter_indices(const size_t element, 
-    size_t bin_count, size_t hash_count) {
-    std::vector<size_t> indices;
-    std::hash<size_t> hasher;
-
-    for (size_t i = 0; i < hash_count; i++) {
-        indices.push_back((hasher(element + i) % bin_count));
-    }
-
-    return indices;
-}
-
-void Set::insert(size_t element) {
-    elements.insert(element);
-}
-
-// Convert the set into a Bloom filter representation
-std::vector<bool> Set::to_bloom_filter(size_t bin_count, size_t hash_count) const {
-    std::vector<bool> bloom_filter(bin_count, false);
-
-    for (size_t element : elements) {
-        auto indices = Set::bloom_filter_indices(element, bin_count, hash_count);
-        for (size_t idx : indices) {
-            bloom_filter[idx] = true;
-        }
-    }
-
-    return bloom_filter;
-}
 
 /* Method Definitions for 'ApproximateMpsi' class */
-ApproximateMpsi::ApproximateMpsi(size_t minimum_bin_count, size_t hash_count, size_t domain_size, size_t set_size)
+ApproximateMpsi::ApproximateMpsi(size_t minimum_bin_count, size_t hash_count, size_t domain_size, size_t set_size, const std::string& results_filename)
         : bin_count((minimum_bin_count + 63) / 64 * 64),
           hash_count(hash_count),
           domain_size(domain_size),
-          set_size(set_size) {
+          set_size(set_size),
+          stats(results_filename)
+           {
 
           }
 
@@ -106,7 +47,7 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_part
     std::vector<std::unique_ptr<Party>> parties;
     parties.reserve(n_parties);
     for (const auto& seeds : party_seeds) {
-        parties.push_back(std::make_unique<ApproximateMpsiParty>(seeds, bin_count, hash_count));
+        parties.push_back(std::make_unique<ApproximateMpsiParty>(seeds, bin_count, hash_count, stats));
     }
     return parties;
 }
@@ -117,16 +58,20 @@ std::vector<Set> ApproximateMpsi::gen_sets_with_uniform_intersection(size_t n_pa
     std::mt19937 rng(std::random_device{}());
 
     // Step 1: Generate a common subset of elements
+    std::cout << "Generating common subset of elements...\n";
     size_t common_size = set_size / 2; // Half the set will be common
     while (common_elements.size() < common_size) {
         common_elements.insert(rng() % domain_size);
     }
 
     // Step 2: Generate unique sets for each party
+    std::cout << "Generating unique sets for each party...\n";
     for (size_t i = 0; i < n_parties; ++i) {
         std::unordered_set<size_t> unique_elements = common_elements;
-
+        std::cout << "Generating unique set for party " << i <<", unique_elements size=" <<unique_elements.size()
+        <<", set_size = "<<set_size << "...\n";
         while (unique_elements.size() < set_size) {
+            std::cout<<"Inserting element for unique_elements size="<<unique_elements.size()<<"...\n";
             unique_elements.insert(rng() % domain_size);
         }
 
@@ -141,7 +86,10 @@ std::vector<std::optional<Set>> ApproximateMpsi::generate_inputs(size_t n_partie
     inputs.emplace_back(std::nullopt); // First element (None in Rust)
 
     // Generate sets with uniform intersection
+    std::cout <<"Generating sets with uniform intersection...\n";
     auto sets = gen_sets_with_uniform_intersection(n_parties, set_size, domain_size);
+
+    std::cout << "Emplacing back\n";
     for (auto& set : sets) {
         inputs.emplace_back(std::move(set));
     }
@@ -222,44 +170,48 @@ Stats ApproximateMpsi::evaluate(
     return {stats.get_average_time(), stats.was_successful()};
 }*/
 
-Stats ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_count,
-                                const FullMesh& network_description, size_t repetitions,
-                                const std::string& results_filename) {
-    Stats stats(results_filename); //experiment_name + ".csv");  // Initialize Stats to log CSV output
+void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_count,
+                                const FullMesh& network_description, size_t repetitions) {
+    //Stats stats(results_filename); //experiment_name + ".csv");  // Initialize Stats to log CSV output
 
     for (size_t i = 0; i < repetitions; ++i) {
         std::cout << "Running repetition " << (i + 1) << " of " << repetitions << "...\n";
 
         // Step 1: Generate inputs (randomized sets with uniform intersection)
+        std::cout << "Generating inputs...\n";
         auto inputs = generate_inputs(party_count);
 
         // Step 2: Set up network communication (FullMesh)
+        std::cout << "Setting up network...\n";
         const FullMesh& network = network_description;
 
         // Step 3: Set up parties
+        std::cout << "Setting up parties...\n";
         auto parties = setup_parties(party_count);
 
         // Step 4: Run protocol for all parties
+        std::cout << "Running protocol for all parties...\n";
         std::vector<std::optional<Set>> outputs;
         outputs.reserve(parties.size());
         /* for (size_t id = 0; id < party_count; id++) { */
         for (size_t id = 0; id < party_count-1; id++) { //TBD:Is this okay??
             if (parties[id] == nullptr) continue;  // Skip parties that are not part of the protocol
-            auto out = parties[id]->run(id, party_count, inputs[id], network.get_channels(id), stats);
+            auto out = parties[id]->run(id, party_count, inputs[id], network.get_channels(id));
             outputs.push_back(std::move(out));
         }
 
         // Step 5: Validate outputs
+        std::cout << "Validating outputs...\n";
         bool success = validate_outputs(inputs, outputs);
-        stats.log_experiment(i + 1, success);  // Log success/failure to CSV
+        //stats.log_experiment(i + 1, success);  // Log success/failure to CSV
     }
 
-    return stats;
+    //return stats;
 }
 
 /* Method Definitions for 'ApproximateMpsiParty' class */
-ApproximateMpsiParty::ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count)
-    : seeds(std::move(seeds)), bin_count(bin_count), hash_count(hash_count) {}
+ApproximateMpsiParty::ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, Stats& pstats)
+    : seeds(std::move(seeds)), bin_count(bin_count), hash_count(hash_count), stats(pstats) {}
 
 /*
 void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channels) {
@@ -359,6 +311,7 @@ std::vector<bool> ApproximateMpsiParty::compute_query_results(
     // Convert aggregated share into individual byte chunks
     std::vector<std::array<uint8_t, SHARE_BYTE_COUNT>> shares = aggregated_share.to_byte_chunks<SHARE_BYTE_COUNT>();
 
+    auto start_time = std::chrono::steady_clock::now();
     for (const auto& query_pattern : query_patterns) {
         std::array<uint8_t, SHARE_BYTE_COUNT> xor_result = {0};
 
@@ -372,7 +325,10 @@ std::vector<bool> ApproximateMpsiParty::compute_query_results(
         // If XOR result is all zero, it’s a match
         results.push_back(std::all_of(xor_result.begin(), xor_result.end(), [](uint8_t b) { return b == 0; }));
     }
-
+    auto end_time = std::chrono::steady_clock::now();
+    stats.log_duration(Stats::OPS::XOR_OP, start_time, end_time);
+    //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+ 
     return results;
 }
 
@@ -403,7 +359,7 @@ Set ApproximateMpsiParty::extract_intersection(
     return intersection;
 }
 
-void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channels, Stats& stats) {
+void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now(); //std::chrono::high_resolution_clock::now();
 
     // Receive all clients' shares
@@ -435,14 +391,14 @@ void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channel
 
     // Log execution time
     auto end_time = std::chrono::steady_clock::now();//std::chrono::high_resolution_clock::now();
-    stats.log_duration("Server Execution Time", start_time, end_time);
+    //stats.log_duration("Server Execution Time", start_time, end_time);
 }
 
-Set ApproximateMpsiParty::run_querier_approx(const Set& input, Channels& channels, Stats& stats) {
+Set ApproximateMpsiParty::run_querier_approx(const Set& input, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now();// std::chrono::high_resolution_clock::now();
 
     // Act as a client first
-    run_client_approx(input, channels, stats);
+    run_client_approx(input, channels);
 
     // Send query patterns
     std::vector<std::vector<size_t>> query_patterns = generate_query_patterns(input);
@@ -457,43 +413,46 @@ Set ApproximateMpsiParty::run_querier_approx(const Set& input, Channels& channel
 
     // Log execution time
     auto end_time = std::chrono::steady_clock::now();// std::chrono::high_resolution_clock::now();
-    stats.log_duration("Querier Execution Time", start_time, end_time);
+    //stats.log_duration("Querier Execution Time", start_time, end_time);
 
     return output;
 }
 
-void ApproximateMpsiParty::run_client_approx(const Set& input, Channels& channels, Stats& stats) {
+void ApproximateMpsiParty::run_client_approx(const Set& input, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now(); //std::chrono::high_resolution_clock::now();
 
     // Encode input into a Bloom filter
     std::vector<bool> bloom_filter = input.to_bloom_filter(bin_count, hash_count);
+    auto end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
+    stats.log_duration(Stats::OPS::BLOOMFILTER_OP, start_time, end_time);
 
+    start_time = std::chrono::steady_clock::now();
     // Generate a zero share and corrupt it conditionally
     SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count);
     SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);
+    // Log execution time
+    end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
+    stats.log_duration(Stats::OPS::XOF_OP, start_time, end_time);
 
     // Send the share to the server
     channels.send(corrupted_share.to_bytes(), 0);
 
-    // Log execution time
-    auto end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
-    
-    stats.log_duration("Client Execution Time", start_time, end_time);
+    //stats.log_duration("Client Execution Time", start_time, end_time);
 }
 
-std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const Input& input, Channels& channels, Stats& stats) {
+std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const Input& input, Channels& channels) {
     Set output;
     switch(id) {
         case 0:
-            run_server_approx(n_parties, channels, stats);
+            run_server_approx(n_parties, channels);
             break;
 
         case 1:
-            output = run_querier_approx(*input, channels, stats);
+            output = run_querier_approx(*input, channels);
             break;
 
         default:
-            run_client_approx(*input, channels, stats);
+            run_client_approx(*input, channels);
             break;
         
     }

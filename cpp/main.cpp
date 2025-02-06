@@ -77,6 +77,10 @@ int main(int argc, char* argv[]) {
               << "  Repetitions: " << options.repetitions << "\n"
               << "  Results Filename: " << options.results_filename << "\n";
 
+    if (options.domain_size < options.set_size) {
+        std::cerr << "Error: Domain size must be greater than or equal to set size\n";
+        return 1;
+    }
     // Initialize the network description
     //FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
       //                                 ? FullMesh::new_default()
@@ -86,12 +90,12 @@ int main(int argc, char* argv[]) {
                                         ? FullMesh::new_default()
                                         : FullMesh(options.latency, options.bytes_per_sec, options.party_count);
     // Run the protocol
-    ApproximateMpsi protocol(options.bin_count, options.hash_count, options.domain_size, options.set_size);
-    Stats stats = protocol.evaluate(
-        "Experiment", options.party_count, network_description, options.repetitions, options.results_filename);
+    ApproximateMpsi protocol(options.bin_count, options.hash_count, options.domain_size, options.set_size, options.results_filename);
+    /*Stats stats =*/ 
+    protocol.evaluate("Experiment", options.party_count, network_description, options.repetitions);
 
     // Output results
-    stats.output_party_csv(1, options.results_filename);
+    //stats.output_party_csv(1); //, options.results_filename);
 
     return 0;
 }

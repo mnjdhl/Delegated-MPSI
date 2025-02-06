@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "blake3.h" // Include BLAKE3 library for hashing
 #include "secret_sharing_simd.hpp"
+#include <chrono>
 
 // Constants
 constexpr size_t SHARE_BYTE_COUNT = 64;
@@ -90,8 +91,8 @@ SimdBytes xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
 }
 
 // Function for XOF (Extendable Output Function) using BLAKE3
-//SimdBytes xof(const std::vector<uint8_t>& seed, size_t byte_count) {
 SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
+    //auto start_time = std::chrono::steady_clock::now();
     // Initialize the BLAKE3 hasher and compute XOF
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
@@ -100,14 +101,13 @@ SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
     // Finalize the output
     std::vector<uint8_t> expanded_bytes(byte_count, 0);
     blake3_hasher_finalize(&hasher, expanded_bytes.data(), byte_count);
-
+    //auto end_time = std::chrono::steady_clock::now();
     return SimdBytes::from_bytes(expanded_bytes);
 }
 
 // Create Zero Share
 SimdBytes create_zero_share(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count) {
     auto seeds_iterator = seeds.begin();
-    //SimdBytes share = xof(*seeds_iterator, byte_count);
     SimdBytes share = blake3_xof(*seeds_iterator, byte_count);
 
     for (++seeds_iterator; seeds_iterator != seeds.end(); ++seeds_iterator) {

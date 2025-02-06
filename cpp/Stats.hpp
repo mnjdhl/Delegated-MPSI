@@ -9,8 +9,21 @@ private:
     size_t total_repetitions;
     std::string filename;
     std::ofstream file;  // File stream for CSV logging
+    std::vector<double> xor_exec_times;
+    std::vector<double> xof_exec_times;
+    std::vector<double> bloomfilter_exec_times;
 
 public:
+    enum OPS {
+        XOR_OP,
+        XOF_OP,
+        BLOOMFILTER_OP
+    };
+
+    ~Stats() {
+        output_party_csv();
+        if (file.is_open()) file.close();
+    }
     Stats(size_t repetitions, const std::string& results_filename)
         : total_repetitions(repetitions), filename(results_filename) {
         // Open file and write CSV header
@@ -19,16 +32,17 @@ public:
             std::cerr << "Error: Unable to open results file " << filename << "\n";
             return;
         }
-        lfile << "Repetition, ExecutionTime(ms), Success\n";
-        lfile.close();
+        //lfile << "Repetition, ExecutionTime(ms), Success\n";
+        //lfile.close();
     }
 
     Stats(const std::string& filename) : file(filename, std::ios::app) {
         if (!file.is_open()) {
             std::cerr << "Error opening file: " << filename << std::endl;
-        } else {
-            file << "Repetition,Success\n";  // Write CSV header if needed
-        }
+        } 
+        /*else {
+            file << "Repetition, Success\n";  // Write CSV header if needed
+        }*/
     }
 
     void log_result(size_t repetition, double exec_time, bool success) {
@@ -62,16 +76,27 @@ public:
                   << " (" << (100.0 * successful_runs / total_repetitions) << "%)\n";
     }
 
-    void output_party_csv(int party_id, const std::string& filename) const {
-        std::ofstream file(filename, std::ios::trunc);
+    void output_party_csv() { //int party_id) { 
         if (!file.is_open()) {
-            throw std::ios_base::failure("Failed to open file: " + filename);
+            file.open(filename, std::ios::trunc);
+            if (!file.is_open())
+                throw std::ios_base::failure("Failed to open file: " + filename);
         }
 
         // Output dummy stats for now
-        file << "PartyID,ExecutionTime\n";
-        file << party_id << "," << 0.123 << "\n"; // Example data
-        file.close();
+        //file << "PartyID, ExecutionTime\n";
+        //file << party_id << ", " << 0.123 << "\n"; // Example data
+        double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
+        file <<"XOR, XOF, BloomFilter\n";
+        for (int i=0; i<xor_exec_times.size(); i++) {
+            file <<xor_exec_times[i]<<", "<<xof_exec_times[i]<<", "<<bloomfilter_exec_times[i]<< "\n";
+            xor_sum += xor_exec_times[i];
+            xof_sum += xof_exec_times[i];
+            bloomfilter_sum += bloomfilter_exec_times[i];
+        }
+        file <<"Total: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
+        file << "Average: " << xor_sum/xor_exec_times.size() << ", " << xof_sum/xof_exec_times.size() << ", " << bloomfilter_sum/bloomfilter_exec_times.size() << "\n";
+
     }
 
     void log_experiment(size_t repetition, bool success) {
@@ -89,6 +114,24 @@ public:
         
         if (file.is_open()) {
             file << label << "," << duration << " ms" << std::endl;
+        }
+    }
+
+    void log_duration(const OPS& op, 
+                      const std::chrono::steady_clock::time_point& start_time, 
+                      const std::chrono::steady_clock::time_point& end_time) {
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+        
+        switch (op) {
+            case XOR_OP:
+                xor_exec_times.push_back(duration);
+                break;
+            case XOF_OP:
+                xof_exec_times.push_back(duration);
+                break;
+            case BLOOMFILTER_OP:
+                bloomfilter_exec_times.push_back(duration);
+                break;
         }
     }
 };
