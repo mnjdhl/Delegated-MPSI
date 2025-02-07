@@ -73,15 +73,15 @@ private:
     std::optional<Set> run_querier_approx(const Set& input, Channels& channels);
     void run_client_approx(const Set& input, Channels& channels);
    */
-    std::vector<bool> compute_query_results(const std::vector<std::vector<size_t>>& query_patterns, 
+    std::vector<bool> compute_query_results(size_t id, const std::vector<std::vector<size_t>>& query_patterns, 
     const SimdBytes& aggregated_share);
     std::vector<std::vector<size_t>> generate_query_patterns(const Set& input);
     Set extract_intersection(const Set& input, const std::vector<bool>& results);
     std::vector<size_t> bloom_filter_indices(const size_t element, size_t bin_count, size_t hash_count);
 
-    void run_server_approx(size_t n_parties, Channels& channels);
-    Set run_querier_approx(const Set& input, Channels& channels);
-    void run_client_approx(const Set& input, Channels& channels);
+    void run_server_approx(size_t id, size_t n_parties, Channels& channels);
+    Set run_querier_approx(size_t id, const Set& input, Channels& channels);
+    void run_client_approx(size_t id, const Set& input, Channels& channels);
 };
 
 #endif // APPROXIMATE_MPSI_HPP

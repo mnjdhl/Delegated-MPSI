@@ -1,6 +1,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <map>
 
 class Stats {
 private:
@@ -9,6 +10,12 @@ private:
     size_t total_repetitions;
     std::string filename;
     std::ofstream file;  // File stream for CSV logging
+    #if 0
+    std::map<int, std::vector<double>> xor_exec_times;
+    std::map<int, std::vector<double>> xof_exec_times;
+    std::map<int, std::vector<double>> bloomfilter_exec_times;
+    #endif
+
     std::vector<double> xor_exec_times;
     std::vector<double> xof_exec_times;
     std::vector<double> bloomfilter_exec_times;
@@ -76,27 +83,41 @@ public:
                   << " (" << (100.0 * successful_runs / total_repetitions) << "%)\n";
     }
 
-    void output_party_csv() { //int party_id) { 
+    void output_party_csv() {
         if (!file.is_open()) {
             file.open(filename, std::ios::trunc);
             if (!file.is_open())
                 throw std::ios_base::failure("Failed to open file: " + filename);
         }
 
-        // Output dummy stats for now
-        //file << "PartyID, ExecutionTime\n";
-        //file << party_id << ", " << 0.123 << "\n"; // Example data
-        double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
-        file <<"XOR, XOF, BloomFilter\n";
+    #if 0
         for (int i=0; i<xor_exec_times.size(); i++) {
-            file <<xor_exec_times[i]<<", "<<xof_exec_times[i]<<", "<<bloomfilter_exec_times[i]<< "\n";
-            xor_sum += xor_exec_times[i];
-            xof_sum += xof_exec_times[i];
-            bloomfilter_sum += bloomfilter_exec_times[i];
+            double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
+            file << "PartyID: " << i << "\n";
+            file <<"XOR,    XOF,    BloomFilter\n";
+            for (int j=0; j<xor_exec_times[i].size(); j++) {
+                file <<xor_exec_times[i][j]<<", "<<xof_exec_times[i][j]<<", "<<bloomfilter_exec_times[i][j]<< "\n";
+                xor_sum += xor_exec_times[i][j];
+                xof_sum += xof_exec_times[i][j];
+                bloomfilter_sum += bloomfilter_exec_times[i][j];
+            }
+            file<<"Sum: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
+            file << "Total: "<<xor_exec_times[i].size()<<", "<<xof_exec_times[i].size()<<", "<<bloomfilter_exec_times[i].size()<< "\n";
+            file << "Average: " << xor_sum/xor_exec_times[i].size() << ", " << xof_sum/xof_exec_times[i].size() << ", " << bloomfilter_sum/bloomfilter_exec_times[i].size() << "\n";
+            file <<"All times in ms\n";
         }
-        file <<"Total: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
+    #endif
+        double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
+        file << "XOR (in ms),    XOF (in ms),    BloomFilter (in ms)\n";
+        for (int j=0; j<xor_exec_times.size(); j++) {
+            file <<xor_exec_times[j]<<", "<<xof_exec_times[j]<<", "<<bloomfilter_exec_times[j]<< "\n";
+            xor_sum += xor_exec_times[j];
+            xof_sum += xof_exec_times[j];
+            bloomfilter_sum += bloomfilter_exec_times[j];
+        }
+        file<<"Sum: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
+        file << "Total: "<<xor_exec_times.size()<<", "<<xof_exec_times.size()<<", "<<bloomfilter_exec_times.size()<< "\n";
         file << "Average: " << xor_sum/xor_exec_times.size() << ", " << xof_sum/xof_exec_times.size() << ", " << bloomfilter_sum/bloomfilter_exec_times.size() << "\n";
-
     }
 
     void log_experiment(size_t repetition, bool success) {
@@ -118,10 +139,33 @@ public:
     }
 
     void log_duration(const OPS& op, 
-                      const std::chrono::steady_clock::time_point& start_time, 
-                      const std::chrono::steady_clock::time_point& end_time) {
+                    int party_id,
+                    const std::chrono::steady_clock::time_point& start_time, 
+                    const std::chrono::steady_clock::time_point& end_time) {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
         
+        #if 0
+        switch (op) {
+            case XOR_OP:
+                if (xor_exec_times.find(party_id) == xor_exec_times.end()) {
+                    xor_exec_times[party_id] = std::vector<double>();
+                }
+                xor_exec_times[party_id].push_back(duration);
+                break;
+            case XOF_OP:
+                if (xof_exec_times.find(party_id) == xof_exec_times.end()) {
+                    xof_exec_times[party_id] = std::vector<double>();
+                }
+                xof_exec_times[party_id].push_back(duration);
+                break;
+            case BLOOMFILTER_OP:
+                if (bloomfilter_exec_times.find(party_id) == bloomfilter_exec_times.end()) {
+                    bloomfilter_exec_times[party_id] = std::vector<double>();
+                }
+                bloomfilter_exec_times[party_id].push_back(duration);
+                break;
+        }
+        #endif
         switch (op) {
             case XOR_OP:
                 xor_exec_times.push_back(duration);

@@ -303,6 +303,7 @@ std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const 
 }*/
 
 std::vector<bool> ApproximateMpsiParty::compute_query_results(
+    size_t id,
     const std::vector<std::vector<size_t>>& query_patterns, 
     const SimdBytes& aggregated_share) 
 {
@@ -326,7 +327,7 @@ std::vector<bool> ApproximateMpsiParty::compute_query_results(
         results.push_back(std::all_of(xor_result.begin(), xor_result.end(), [](uint8_t b) { return b == 0; }));
     }
     auto end_time = std::chrono::steady_clock::now();
-    stats.log_duration(Stats::OPS::XOR_OP, start_time, end_time);
+    stats.log_duration(Stats::OPS::XOR_OP, id, start_time, end_time);
     //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
  
     return results;
@@ -359,7 +360,7 @@ Set ApproximateMpsiParty::extract_intersection(
     return intersection;
 }
 
-void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channels) {
+void ApproximateMpsiParty::run_server_approx(size_t id, size_t n_parties, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now(); //std::chrono::high_resolution_clock::now();
 
     // Receive all clients' shares
@@ -384,7 +385,7 @@ void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channel
     channels.receive(1, query_patterns);
 
     // Compute results
-    std::vector<bool> results = compute_query_results(query_patterns, aggregated_share);
+    std::vector<bool> results = compute_query_results(id, query_patterns, aggregated_share);
 
     // Send results to the querier (id = 1)
     channels.send(1, results);
@@ -394,11 +395,11 @@ void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channel
     //stats.log_duration("Server Execution Time", start_time, end_time);
 }
 
-Set ApproximateMpsiParty::run_querier_approx(const Set& input, Channels& channels) {
+Set ApproximateMpsiParty::run_querier_approx(size_t id, const Set& input, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now();// std::chrono::high_resolution_clock::now();
 
     // Act as a client first
-    run_client_approx(input, channels);
+    run_client_approx(id, input, channels);
 
     // Send query patterns
     std::vector<std::vector<size_t>> query_patterns = generate_query_patterns(input);
@@ -418,13 +419,13 @@ Set ApproximateMpsiParty::run_querier_approx(const Set& input, Channels& channel
     return output;
 }
 
-void ApproximateMpsiParty::run_client_approx(const Set& input, Channels& channels) {
+void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channels& channels) {
     auto start_time = std::chrono::steady_clock::now(); //std::chrono::high_resolution_clock::now();
 
     // Encode input into a Bloom filter
     std::vector<bool> bloom_filter = input.to_bloom_filter(bin_count, hash_count);
     auto end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
-    stats.log_duration(Stats::OPS::BLOOMFILTER_OP, start_time, end_time);
+    stats.log_duration(Stats::OPS::BLOOMFILTER_OP, id, start_time, end_time);
 
     start_time = std::chrono::steady_clock::now();
     // Generate a zero share and corrupt it conditionally
@@ -432,7 +433,7 @@ void ApproximateMpsiParty::run_client_approx(const Set& input, Channels& channel
     SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);
     // Log execution time
     end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
-    stats.log_duration(Stats::OPS::XOF_OP, start_time, end_time);
+    stats.log_duration(Stats::OPS::XOF_OP, id, start_time, end_time);
 
     // Send the share to the server
     channels.send(corrupted_share.to_bytes(), 0);
@@ -444,15 +445,15 @@ std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const 
     Set output;
     switch(id) {
         case 0:
-            run_server_approx(n_parties, channels);
+            run_server_approx(id, n_parties, channels);
             break;
 
         case 1:
-            output = run_querier_approx(*input, channels);
+            output = run_querier_approx(id, *input, channels);
             break;
 
         default:
-            run_client_approx(*input, channels);
+            run_client_approx(id, *input, channels);
             break;
         
     }
