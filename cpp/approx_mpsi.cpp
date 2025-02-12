@@ -15,9 +15,10 @@
 
 
 /* Method Definitions for 'ApproximateMpsi' class */
-ApproximateMpsi::ApproximateMpsi(size_t minimum_bin_count, size_t hash_count, size_t domain_size, size_t set_size, const std::string& results_filename)
+ApproximateMpsi::ApproximateMpsi(size_t minimum_bin_count, size_t hash_count, std::string hash_func, size_t domain_size, size_t set_size, const std::string& results_filename)
         : bin_count((minimum_bin_count + 63) / 64 * 64),
           hash_count(hash_count),
+          hash_func(hash_func),
           domain_size(domain_size),
           set_size(set_size),
           stats(results_filename)
@@ -47,7 +48,7 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_part
     std::vector<std::unique_ptr<Party>> parties;
     parties.reserve(n_parties);
     for (const auto& seeds : party_seeds) {
-        parties.push_back(std::make_unique<ApproximateMpsiParty>(seeds, bin_count, hash_count, stats));
+        parties.push_back(std::make_unique<ApproximateMpsiParty>(seeds, bin_count, hash_count, hash_func, stats));
     }
     return parties;
 }
@@ -210,8 +211,8 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
 }
 
 /* Method Definitions for 'ApproximateMpsiParty' class */
-ApproximateMpsiParty::ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, Stats& pstats)
-    : seeds(std::move(seeds)), bin_count(bin_count), hash_count(hash_count), stats(pstats) {}
+ApproximateMpsiParty::ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func, Stats& pstats)
+    : seeds(std::move(seeds)), bin_count(bin_count), hash_count(hash_count), hash_func(hash_func), stats(pstats) {}
 
 /*
 void ApproximateMpsiParty::run_server_approx(size_t n_parties, Channels& channels) {
@@ -337,7 +338,7 @@ std::vector<std::vector<size_t>> ApproximateMpsiParty::generate_query_patterns(c
     std::vector<std::vector<size_t>> query_patterns;
 
     for (const auto& element : input.get_elements()) {
-        query_patterns.push_back(Set::bloom_filter_indices(element, bin_count, hash_count));
+        query_patterns.push_back(Set::bloom_filter_indices(element, bin_count, hash_count, hash_func));
     }
 
     return query_patterns;
@@ -423,13 +424,13 @@ void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channe
     auto start_time = std::chrono::steady_clock::now(); //std::chrono::high_resolution_clock::now();
 
     // Encode input into a Bloom filter
-    std::vector<bool> bloom_filter = input.to_bloom_filter(bin_count, hash_count);
+    std::vector<bool> bloom_filter = input.to_bloom_filter(bin_count, hash_count, hash_func);
     auto end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();
     stats.log_duration(Stats::OPS::BLOOMFILTER_OP, id, start_time, end_time);
 
     start_time = std::chrono::steady_clock::now();
     // Generate a zero share and corrupt it conditionally
-    SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count);
+    SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);
     SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);
     // Log execution time
     end_time = std::chrono::steady_clock::now(); // std::chrono::high_resolution_clock::now();

@@ -17,6 +17,7 @@
 #include "Channels.hpp"
 #include "secret_sharing_simd.hpp"
 #include "Set.hpp"
+#include "hash_funcs.hpp"
 
 // Constants
 constexpr size_t SHARE_BYTE_COUNT = 5;
@@ -32,7 +33,7 @@ public:
 class ApproximateMpsi {
 public:
     // Constructor
-    ApproximateMpsi(size_t bin_count, size_t hash_count, size_t domain_size, size_t set_size, const std::string& results_filename);
+    ApproximateMpsi(size_t bin_count, size_t hash_count, std::string hash_func, size_t domain_size, size_t set_size, const std::string& results_filename);
 
     std::vector<Set> gen_sets_with_uniform_intersection(size_t n_parties, size_t set_size, size_t domain_size);
     std::vector<std::optional<Set>> generate_inputs(size_t n_parties) /*const*/;
@@ -47,6 +48,7 @@ public:
 private:
     size_t bin_count;
     size_t hash_count;
+    std::string hash_func;
     size_t domain_size;
     size_t set_size;
     Stats stats;
@@ -56,7 +58,7 @@ private:
 class ApproximateMpsiParty : public Party {
 public:
     // Constructor
-    ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, Stats& stats);
+    ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func, Stats& stats);
 
     // Public interface
     //std::optional<Set> run(size_t id, size_t n_parties, const std::optional<Set>& input, 
@@ -66,6 +68,7 @@ private:
     std::vector<std::array<uint8_t, 16>> seeds;
     size_t bin_count;
     size_t hash_count;
+    std::string hash_func;
     Stats& stats;
 
     // Internal functions

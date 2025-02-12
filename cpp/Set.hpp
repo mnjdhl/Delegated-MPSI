@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <vector>
 #include <optional>
+#include <boost/container_hash/hash.hpp>
+//#include "secret_sharing_simd.hpp"
 #if USE_BLOOM_FILTER_LIB
 #include "bloom_filter.hpp"
 #endif
@@ -18,9 +20,13 @@ public:
     std::vector<size_t> to_vector() const;
     bool operator==(const Set& other) const;
     std::unordered_set<size_t> get_elements() const;
+    std::vector<size_t> bloom_filter_indices_std_hash(const size_t element, 
+        size_t bin_count, size_t hash_count);
+    std::vector<size_t> bloom_filter_indices_boost_hash(const size_t element, 
+            size_t bin_count, size_t hash_count);
     static std::vector<size_t> bloom_filter_indices(const size_t element, 
-    size_t bin_count, size_t hash_count);
-    std::vector<bool> to_bloom_filter(size_t bin_count, size_t hash_count) const;
+    size_t bin_count, size_t hash_count, const std::string hash_function);
+    std::vector<bool> to_bloom_filter(size_t bin_count, size_t hash_count, const std::string hash_function) const;
 
 private:
     std::unordered_set<size_t> elements;
