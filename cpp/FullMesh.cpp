@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <iostream>
 
+using namespace std::chrono_literals;
+
 // Define static members
 std::unordered_map<size_t, std::unordered_map<size_t, std::queue<std::vector<uint8_t>>>> FullMesh::network;
 std::mutex FullMesh::network_mutex;
@@ -50,13 +52,15 @@ void FullMesh::send(size_t sender_id, size_t recipient_id, const std::vector<uin
 
     // Simulate latency
     if (latency_seconds > 0.0) {
-        std::this_thread::sleep_for(std::chrono::duration<double>(latency_seconds));
+        //std::this_thread::sleep_for(std::chrono::duration<double>(latency_seconds));
+        std::this_thread::sleep_for(latency_seconds*1ms);
     }
 
     // Simulate bandwidth restriction
     if (bytes_per_sec > 0.0) {
-        double transmission_time = data.size() / bytes_per_sec;
-        std::this_thread::sleep_for(std::chrono::duration<double>(transmission_time));
+        auto transmission_time = (data.size() / bytes_per_sec)*1s;
+        //std::this_thread::sleep_for(std::chrono::duration<double>(transmission_time));
+        std::this_thread::sleep_for(transmission_time);
     }
 
     // Push the data into the recipient’s queue

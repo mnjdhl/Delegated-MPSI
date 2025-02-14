@@ -21,25 +21,19 @@ fi
 SetSize=${SetSizes[3]}
 PartyCount=20
 DomainSize=$((SetSize + 1))
-output_file="MileStone4_$file_id.txt"
-echo "Running for Set Size=$SetSize, Party Count=$PartyCount, Hash Count=$HashCount, Hash Function=$HashFunc and Repetitions=$Repetitions">>$output_file
-echo "Latency (ms),Bandwidth (Bytes/sec),Time (s)" >> $output_file
+output_file="MileStone4_HashFuncs_$file_id.txt"
+echo "Running for Set Size=$SetSize, Party Count=$PartyCount, Latency=$Latency, Bandwidth=$BytesPerSec and Repetitions=$Repetitions">>$output_file
+echo "Hash Function, Hash Count, Time (s)" >> $output_file
 
-for BytesPerSec in ${Bandwidths[@]}
+for HashFunc in ${HashFuncs[@]}
 do
-    for Latency in ${Latencies[@]}
+    for HashCount in ${HashCounts[@]}
     do
-        #msg="Running for Set Size=$SetSize, Party Count=$PartyCount and Hash Function=$HashFunc"
-        #echo $msg
-        #echo $msg >> $FileName
         cmd="../delegated_mpsi -n $PartyCount -k $SetSize -u $DomainSize -m $BinCount -s $HashCount -c $HashFunc  -l $Latency -b $BytesPerSec -r $Repetitions -f $FileName"
         echo $cmd
         TIME=$( { /usr/bin/time -f "%e" $cmd > /dev/null; } 2>&1 )
-        #echo $TIME
-        #echo "" >> $FileName
-        #avg_time=$((TIME / Repetitions))
         avg_time=$(jq -n $TIME/$Repetitions)
-        msg="$Latency,$BytesPerSec,$avg_time"
+        msg="$HashFunc, $HashCount, $avg_time"
         echo $msg>>$output_file
     done
 done
