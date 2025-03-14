@@ -1,0 +1,48 @@
+diff prev_out.txt new_out.txt 
+1c1,9
+< ./test 
+---
+> Parsed Options:
+> Number of experiments: 1
+> Number of clients: 2
+> Public mod bitsize: 40
+> Max set size: 1024
+> Table length: 30
+> Bucket max load: 100
+> Intersection size: 1
+> X size: 201
+8c16
+< 	 Public modulous:   584088281941
+---
+> 	 Public modulous:   300588280189
+21c29
+<  inserting:76052689146
+---
+>  inserting:287423688791
+25,26c33,34
+< Element 76052689146 has been inserted
+< Element 76052689146 has been deleted
+---
+> Element 287423688791 has been inserted
+> Element 287423688791 has been deleted
+47c55
+<  Outsourcing-- time:0.132978
+---
+>  Outsourcing-- time:0.134636
+50c58
+<  Computation Request-- time:0.017464
+---
+>  Computation Request-- time:0.017884
+53c61
+<  Computation Grant-- time:0.108004
+---
+>  Computation Grant-- time:0.10969
+56c64
+<  Server Computation-- time:0.104428
+---
+>  Server Computation-- time:0.110658
+59c67
+<  Find intersection-- time:0.0023
+---
+>  Find intersection-- time:0.002396
+

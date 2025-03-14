@@ -1,0 +1,70 @@
+Parsed Options:
+Number of experiments: 1
+Number of clients: 2
+Public mod bitsize: 40
+Max set size: 1024
+Table length: 30
+Bucket max load: 100
+Intersection size: 1
+X size: 201
+
+----------------------------------------------------------------
+	 Set_size:       1024
+	 Pub_mod_bitsize:  40
+	 Bucket_max_load:  100
+	 Table_length:     30
+	 Public modulous:   300588280189
+	 Number of Clients :   2
+
+----------------------------------------------------------------
+
+------ Generating two random sets with distinct values and unequal to x_points
+
+----------------- Client B outsourcing -----------------
+
+----------------- Clients are outsourcing -----------------
+
+ client 0 is outsourcing
+
+ inserting:287423688791
+
+++++++++++++++++++++++
+
+Element 287423688791 has been inserted
+Element 287423688791 has been deleted
+
+---- Gennerate the Computation Request
+
+---- Grant the Computation Done
+
+***---- Server-side Result Computation.
+
+ cleanging the server
+
+---- Client-side Result Retirieval
+
+
+	======= Result =======
+
+====================
+
+
+	============= Run time ===================
+
+
+ Outsourcing-- time:0.134636
+
+
+ Computation Request-- time:0.017884
+
+
+ Computation Grant-- time:0.10969
+
+
+ Server Computation-- time:0.110658
+
+
+ Find intersection-- time:0.002396
+
+
+	============================================
