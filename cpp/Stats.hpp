@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include "common.hpp"
 
 class Stats {
 private:
@@ -28,11 +29,16 @@ public:
     };
 
     ~Stats() {
-        output_party_csv();
-        if (file.is_open()) file.close();
+        if (g_options.stats) {
+            output_party_csv();
+            if (file.is_open()) file.close();
+        }
     }
     Stats(size_t repetitions, const std::string& results_filename)
         : total_repetitions(repetitions), filename(results_filename) {
+        if (!g_options.stats) {
+            return;
+        }
         // Open file and write CSV header
         std::ofstream lfile(filename, std::ios::trunc);
         if (!lfile.is_open()) {
@@ -44,6 +50,9 @@ public:
     }
 
     Stats(const std::string& filename) : file(filename, std::ios::app) {
+        if (!g_options.stats) {
+            return;
+        }
         if (!file.is_open()) {
             std::cerr << "Error opening file: " << filename << std::endl;
         } 
@@ -53,6 +62,9 @@ public:
     }
 
     void log_result(size_t repetition, double exec_time, bool success) {
+        if (!g_options.stats) {
+            return;
+        }
         execution_times.push_back(exec_time);
         if (success) successful_runs++;
 
@@ -77,6 +89,9 @@ public:
     }
 
     void print_summary() const {
+        if (!g_options.stats) {
+            return;
+        }
         std::cout << "Experiment Summary:\n";
         std::cout << "  Average Execution Time: " << get_average_time() << " ms\n";
         std::cout << "  Success Rate: " << successful_runs << " / " << total_repetitions
@@ -121,6 +136,9 @@ public:
     }
 
     void log_experiment(size_t repetition, bool success) {
+        if (!g_options.stats) {
+            return;
+        }
         if (file.is_open()) {
             file << repetition << "," << (success ? "1" : "0") << "\n";
         } else {
@@ -131,6 +149,9 @@ public:
     void log_duration(const std::string& label, 
                       const std::chrono::steady_clock::time_point& start_time, 
                       const std::chrono::steady_clock::time_point& end_time) {
+        if (!g_options.stats) {
+            return;
+        }
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
         
         if (file.is_open()) {
@@ -142,6 +163,9 @@ public:
                     int party_id,
                     const std::chrono::steady_clock::time_point& start_time, 
                     const std::chrono::steady_clock::time_point& end_time) {
+        if (!g_options.stats) {
+            return;
+        }
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
         
         #if 0

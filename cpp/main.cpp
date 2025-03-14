@@ -1,6 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <string>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -10,20 +9,9 @@
 #include <boost/program_options.hpp>
 
 #include "approx_mpsi.hpp"
+#include "common.hpp"
 
-// Command-line options
-struct Options {
-    size_t party_count;
-    size_t set_size;
-    size_t domain_size;
-    size_t bin_count;
-    size_t hash_count;
-    std::string hash_function;
-    double latency;
-    double bytes_per_sec;
-    size_t repetitions;
-    std::string results_filename;
-};
+Options &g_options = *(new Options());
 
 std::optional<Options> parse_options(int argc, char* argv[]) {
     namespace po = boost::program_options;
@@ -41,7 +29,8 @@ std::optional<Options> parse_options(int argc, char* argv[]) {
         ("latency,l", po::value<double>(&options.latency)->default_value(0.0), "Network latency in seconds")
         ("bytes-per-sec,b", po::value<double>(&options.bytes_per_sec)->default_value(0.0), "Bandwidth in bytes per second")
         ("repetitions,r", po::value<size_t>(&options.repetitions)->required(), "Number of repetitions")
-        ("results-filename,f", po::value<std::string>(&options.results_filename)->required(), "Output results filename");
+        ("results-filename,f", po::value<std::string>(&options.results_filename)->required(), "Output results filename")
+        ("stats,t", po::value<bool>(&options.stats)->default_value(false), "Output stats");
 
     po::variables_map vm;
     try {
@@ -67,44 +56,45 @@ int main(int argc, char* argv[]) {
     auto opt = parse_options(argc, argv);
     if (!opt) return 1;
 
-    const auto& options = *opt;
+    g_options = *opt;
     std::cout << "Parsed Options:\n"
-              << "  Party Count: " << options.party_count << "\n"
-              << "  Set Size: " << options.set_size << "\n"
-              << "  Domain Size: " << options.domain_size << "\n"
-              << "  Bin Count: " << options.bin_count << "\n"
-              << "  Hash Count: " << options.hash_count << "\n"
-              << "  Hash Function: " << options.hash_function << "\n"
-              << "  Latency: " << options.latency << "\n"
-              << "  Bytes per Sec: " << options.bytes_per_sec << "\n"
-              << "  Repetitions: " << options.repetitions << "\n"
-              << "  Results Filename: " << options.results_filename << "\n";
+              << "  Party Count: " << g_options.party_count << "\n"
+              << "  Set Size: " << g_options.set_size << "\n"
+              << "  Domain Size: " << g_options.domain_size << "\n"
+              << "  Bin Count: " << g_options.bin_count << "\n"
+              << "  Hash Count: " << g_options.hash_count << "\n"
+              << "  Hash Function: " << g_options.hash_function << "\n"
+              << "  Latency: " << g_options.latency << "\n"
+              << "  Bytes per Sec: " << g_options.bytes_per_sec << "\n"
+              << "  Repetitions: " << g_options.repetitions << "\n"
+              << "  Results Filename: " << g_options.results_filename << "\n"
+              << "  Stats: " << g_options.stats << "\n";
 
-    if (options.domain_size < options.set_size) {
+    if (g_options.domain_size < g_options.set_size) {
         std::cerr << "Error: Domain size must be greater than or equal to set size\n";
         return 1;
     }
     
-    if (find_hash_func(options.hash_function) == false) {
+    if (find_hash_func(g_options.hash_function) == false) {
         std::cerr << "Error: Hash function not found\n";
         return 1;
     }
 
     // Initialize the network description
-    //FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
+    //FullMesh network_description = (g_options.latency == 0.0 && g_options.bytes_per_sec == 0.0)
       //                                 ? FullMesh::new_default()
-        //                               : FullMesh::new_with_overhead(options.latency, options.bytes_per_sec);
+        //                               : FullMesh::new_with_overhead(g_options.latency, g_options.bytes_per_sec);
 
-    FullMesh network_description = (options.latency == 0.0 && options.bytes_per_sec == 0.0)
+    FullMesh network_description = (g_options.latency == 0.0 && g_options.bytes_per_sec == 0.0)
                                         ? FullMesh::new_default()
-                                        : FullMesh(options.latency, options.bytes_per_sec, options.party_count);
+                                        : FullMesh(g_options.latency, g_options.bytes_per_sec, g_options.party_count);
     // Run the protocol
-    ApproximateMpsi protocol(options.bin_count, options.hash_count, options.hash_function, options.domain_size, options.set_size, options.results_filename);
+    ApproximateMpsi protocol(g_options.bin_count, g_options.hash_count, g_options.hash_function, g_options.domain_size, g_options.set_size, g_options.results_filename);
     /*Stats stats =*/ 
-    protocol.evaluate("Experiment", options.party_count, network_description, options.repetitions);
+    protocol.evaluate("Experiment", g_options.party_count, network_description, g_options.repetitions);
 
     // Output results
-    //stats.output_party_csv(1); //, options.results_filename);
+    //stats.output_party_csv(1); //, g_options.results_filename);
 
     return 0;
 }

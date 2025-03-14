@@ -14,7 +14,10 @@
  *                                                                   *
  *********************************************************************
 */
-
+/*
+Source: https://github.com/ArashPartow/bloom.git
+https://github.com/ArashPartow/bloom/blob/master/bloom_filter.hpp
+*/
 
 #ifndef INCLUDE_BLOOM_FILTER_HPP
 #define INCLUDE_BLOOM_FILTER_HPP

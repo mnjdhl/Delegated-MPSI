@@ -86,18 +86,6 @@ bool verify_argon2(const std::string& password, const std::string& hash) {
     return crypto_pwhash_str_verify(hash.c_str(), password.c_str(), password.length()) == 0;
 }
 
-/*
-std::vector<uint8_t> argon2_hash(const uint8_t* seed, size_t byte_count) {
-    std::vector<uint8_t> hash(32); // 32 bytes output
-    crypto_pwhash(hash.data(), hash.size(),
-                  reinterpret_cast<const char*>(seed), byte_count, 
-                  crypto_pwhash_saltbytes(),
-                  crypto_pwhash_OPSLIMIT_INTERACTIVE, 
-                  crypto_pwhash_MEMLIMIT_INTERACTIVE, 
-                  crypto_pwhash_ALG_ARGON2ID13);
-    return hash;
-}*/
-
 std::vector<uint8_t> argon2_hash(const uint8_t* seed, size_t byte_count) {
     if (!seed || byte_count == 0) {
         throw std::invalid_argument("Invalid input seed");

@@ -24,11 +24,18 @@ public:
         size_t bin_count, size_t hash_count);
     std::vector<size_t> bloom_filter_indices_boost_hash(const size_t element, 
             size_t bin_count, size_t hash_count);
-    static std::vector<size_t> bloom_filter_indices(const size_t element, 
-    size_t bin_count, size_t hash_count, const std::string hash_function);
+
     std::vector<bool> to_bloom_filter(size_t bin_count, size_t hash_count, const std::string hash_function) const;
+    std::vector<bool> to_bloom_filter2(size_t bin_count, size_t hash_count, const std::string hash_function) const;
+
+    std::vector<size_t> bloom_filter_indices(const size_t element, 
+        size_t bin_count, size_t hash_count, const std::string hash_function) const;
+    
+    std::vector<std::vector<size_t>>  bloom_filter_indices(size_t bin_count, size_t hash_count, const std::string hash_func) const;    
+    
 
 private:
+    double epsilon; /* False positive probability */
     std::unordered_set<size_t> elements;
 #if USE_BLOOM_FILTER_LIB
     bloom_parameters bl_parameters;
@@ -36,6 +43,10 @@ private:
     void bloom_init(unsigned long long element_count, double false_positive_prob, unsigned long long rand_seed);
     void init();
 #endif
+
+    std::size_t compute_optimal_bit_size(std::size_t n, std::size_t bin_count) const;
+    std::size_t compute_optimal_hash_count(std::size_t n, std::size_t m) const ;
+    std::size_t extract_hash_value(const std::vector<uint8_t>& hash_result) const ;
 };
 
 using Input = std::optional<Set>;

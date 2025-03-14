@@ -52,14 +52,21 @@ SimdBytes& SimdBytes::operator^=(const SimdBytes& rhs) {
 // Conditional selection
 SimdBytes SimdBytes::select( const std::vector<std::array<__m128i, 4>>& masks, const SimdBytes& true_values, const SimdBytes& false_values) {
     SimdBytes result;
-    result.bytes.resize(masks.size());
+    //result.bytes.resize(masks.size());
+    //auto rsize = (masks.size()/SHARE_BYTE_COUNT);
+    auto rsize = masks.size();
+    std::cout<<"SimdBytes::select(): rsize = "<<rsize<<"\n";
+    result.bytes.resize(rsize);
 
+    std::cout<<"SimdBytes::select()(1):  result size="<<result.to_bytes().size()<<", mask size="<<masks.size()<<", true values size="<<true_values.to_bytes().size()<<", false values size="<<false_values.to_bytes().size()<<"\n";
     for (size_t i = 0; i < masks.size(); ++i) {
         for (size_t j = 0; j < 4; ++j) {
             result.bytes[i][j] = _mm_blendv_epi8(
                 false_values.bytes[i][j], true_values.bytes[i][j], masks[i][j]);
         }
     }
+    std::cout<<"SimdBytes::select()(2):  result size="<<result.to_bytes().size()<<", mask size="<<masks.size()<<", true values size="<<true_values.to_bytes().size()<<", false values size="<<false_values.to_bytes().size()<<"\n";
+
     return result;
 }
 
@@ -108,11 +115,9 @@ SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
 
 // Function for XOF (Extendable Output Function) using BLAKE3
 SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count, std::string hash_func) {
-    //auto start_time = std::chrono::steady_clock::now();
 
     //auto expanded_bytes = generic_hash_func(hash_func, seed.data(), seed.size());
     auto expanded_bytes = generic_hash_func(hash_func, seed.data(), byte_count);
-    //auto end_time = std::chrono::steady_clock::now();
     return SimdBytes::from_bytes(expanded_bytes);
 }
 
@@ -120,11 +125,9 @@ SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count
 SimdBytes create_zero_share(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count, std::string hash_func) {
     auto seeds_iterator = seeds.begin();
     SimdBytes share = do_generic_hash(*seeds_iterator, byte_count, hash_func); 
-    //SimdBytes share = blake3_xof(*seeds_iterator, byte_count);
 
     for (++seeds_iterator; seeds_iterator != seeds.end(); ++seeds_iterator) {
         share ^= do_generic_hash(*seeds_iterator, byte_count, hash_func); 
-        //share ^= blake3_xof(*seeds_iterator, byte_count);
     }
     return share;
 }
@@ -147,16 +150,27 @@ SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector
         }
         masks.push_back(mask_sse);
     }
-
+    std::cout<<"SimdBytes::conditionally_corrupt_share(): chunk count="<<chunk_count<<", mask size="<<masks.size()<<"\n";
+ 
     // Generate randomness
-    std::vector<uint8_t> randomness(SHARE_BYTE_COUNT * chunk_count);
+    //auto rsize = SHARE_BYTE_COUNT * chunk_count;
+    //auto rsize =  chunk_count + (chunk_count/2);
+    //auto rsize =  (chunk_count/2) + (SHARE_BYTE_COUNT * 2);//chunk_count/SHARE_BYTE_COUNT;
+    /* auto rsize =  chunk_count + (SHARE_BYTE_COUNT * 2);*/ //Recent Results based on this
+    auto rsize =  chunk_count; // * SHARE_BYTE_COUNT;
+    std::vector<uint8_t> randomness(rsize);
     std::random_device rd;
     std::generate(randomness.begin(), randomness.end(), [&rd]() {
         return static_cast<uint8_t>(rd() & 0xFF);
     });
-
+    std::cout<<"SimdBytes::conditionally_corrupt_share():  randomness size="<<randomness.size()<<", rsize = "<<rsize<<"\n";
+ 
     SimdBytes randomness_simd = SimdBytes::from_bytes(randomness);
+   
+    auto ret_val = SimdBytes::select(masks, randomness_simd, share);
 
+    std::cout<<"SimdBytes::conditionally_corrupt_share():  randomness simd size="<<randomness_simd.to_bytes().size()<<", return value size = "<<ret_val.to_bytes().size()<<"\n";
+ 
     // Use SIMD select to conditionally corrupt the share
-    return SimdBytes::select(masks, randomness_simd, share);
+    return ret_val;
 }

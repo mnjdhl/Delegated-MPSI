@@ -32,7 +32,7 @@ FullMesh::FullMesh(size_t party_count) : party_count(party_count) {
 void FullMesh::initialize_channels() {
     channels.reserve(party_count);
     for (size_t i = 0; i < party_count; ++i) {
-        channels.emplace_back(std::make_unique<Channels>());
+        channels.emplace_back(std::make_unique<Channels>(latency_seconds, bytes_per_sec));
         //channels[i] = std::make_unique<Channels>();  // Assuming Channels has a default constructor
     }
 }

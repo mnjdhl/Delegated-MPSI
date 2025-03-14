@@ -7,6 +7,8 @@
 #include <vector>
 #include <cstdint>
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 class Channels {
     public:
@@ -20,6 +22,12 @@ class Channels {
 
         std::cout << "Channels constructor finished" << std::endl;
     }
+
+    Channels(double latency_seconds, double bytes_per_sec) : latency_seconds(latency_seconds), bytes_per_sec(bytes_per_sec) {
+        network.bucket_size(100);
+    }
+
+    void simulate_network(const std::vector<uint8_t>& data);
     void send(const std::vector<uint8_t>& data, int recipient);
 
     std::vector<uint8_t> receive(int sender);
@@ -34,6 +42,8 @@ class Channels {
 
     // Mutex for thread safety
     static std::mutex network_mutex;
+    double latency_seconds;
+    double bytes_per_sec;
 };
 
 #endif // CHANNELS_HPP

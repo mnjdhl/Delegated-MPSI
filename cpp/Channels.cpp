@@ -1,13 +1,30 @@
 #include "Channels.hpp"
 #include <sstream>
 
+using namespace std::chrono_literals;
+
 /* Members/Methods Definitions for 'Channels' class */
 // Define static members
 std::unordered_map<int, std::queue<std::vector<uint8_t>>> Channels::network;
 std::mutex Channels::network_mutex;
 void Channels::send(const std::vector<uint8_t>& data, int recipient) {
+    simulate_network(data);
     std::lock_guard<std::mutex> lock(network_mutex);
     network[recipient].push(data);
+}
+
+void Channels::simulate_network(const std::vector<uint8_t>& data) {
+    // Simulate latency
+    if (latency_seconds > 0.0) {
+        std::this_thread::sleep_for(latency_seconds*1ms);
+    }
+
+    // Simulate bandwidth restriction
+    if (bytes_per_sec > 0.0) {
+        std::cout<<"Channels::simulate_network:send():data size = "<<data.size()<<"\n";
+        auto transmission_time = (data.size() / bytes_per_sec)*1s;
+        std::this_thread::sleep_for(transmission_time);
+    }
 }
 
 std::vector<uint8_t> Channels::receive(int sender) {
@@ -22,17 +39,6 @@ std::vector<uint8_t> Channels::receive(int sender) {
     network[sender].pop();
     return data;
 }
-
-/*
-void Channels::receive(int from, std::vector<std::vector<size_t>>& data) {
-    std::vector<uint8_t> raw_bytes;
-    receive(from, raw_bytes); // Existing function that gets raw data
-
-    // Deserialize raw bytes into std::vector<std::vector<size_t>>
-    std::istringstream iss(std::string(raw_bytes.begin(), raw_bytes.end()));
-    cereal::BinaryInputArchive archive(iss);
-    archive(data);
-}*/
 
 void Channels::receive(int from, std::vector<std::vector<size_t>>& data) {
     std::vector<uint8_t> raw_bytes;

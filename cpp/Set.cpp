@@ -44,12 +44,16 @@ void Set::init() {
     bloom_init(elements.size(), FALSE_POSITIVE_PROBABILITY, RANDOM_SEED);
 }
 #else
-Set::Set() = default;
+Set::Set() {
+    epsilon = 0.1;
+}
 
 Set::Set(std::initializer_list<size_t> init_list) : elements(init_list) {
+    epsilon = 0.1;
 }
 
 Set::Set(std::unordered_set<size_t> elems) : elements(std::move(elems)) {
+    epsilon = 0.1;
 }
 #endif
 
@@ -78,6 +82,39 @@ std::unordered_set<size_t> Set::get_elements() const {
     return elements;
 }
 
+/*std::size_t Set::compute_optimal_bit_size(std::size_t n, std::size_t bin_count) const {
+    std::size_t base_size = static_cast<std::size_t>(std::ceil(-(n * std::log(epsilon)) / (std::log(2) * std::log(2))));
+    std::cout<<"Set::compute_optimal_bit_size: base_size = " <<base_size<<", returns="<<base_size * bin_count<<"\n";
+    return base_size * bin_count; // Scale bit array by bin count
+}*/
+
+std::size_t Set::compute_optimal_bit_size(std::size_t n, std::size_t bin_count) const {
+    double bits_per_element = -(std::log(epsilon) / (std::log(2) * std::log(2))); 
+    std::size_t bit_array_size = static_cast<std::size_t>(std::ceil(n * bits_per_element));
+
+    std::cout<<"Set::compute_optimal_bit_size: bits_per_element = " <<bits_per_element<<", bit_array_size="<<bit_array_size<<"\n";
+  
+    // Normalize the bit array size based on bin count
+    bit_array_size = (bit_array_size / bin_count) * bin_count;
+  
+    // Set an upper limit to avoid excessive memory usage
+    constexpr std::size_t MAX_BITS = 1'000'000;//10'000'000; // Example cap: 10 million bits
+    auto retvalue = std::min(bit_array_size, MAX_BITS);
+
+    std::cout<<"Set::compute_optimal_bit_size: Final bit_array_size="<<bit_array_size<<", retvalue="<<retvalue<<"\n";
+    return retvalue;
+}
+
+std::size_t Set::compute_optimal_hash_count(std::size_t n, std::size_t m) const {
+        return static_cast<std::size_t>(std::ceil((m / n) * std::log(2)));
+}
+
+std::size_t Set::extract_hash_value(const std::vector<uint8_t>& hash_result) const {
+    std::size_t hash_value = 0;
+    std::memcpy(&hash_value, hash_result.data(), std::min(sizeof(hash_value), hash_result.size()));
+    return hash_value;
+}
+
 std::vector<size_t> Set::bloom_filter_indices_std_hash(const size_t element, 
     size_t bin_count, size_t hash_count) {
     std::vector<size_t> indices;
@@ -102,18 +139,18 @@ std::vector<size_t> Set::bloom_filter_indices_boost_hash(const size_t element,
     return indices;
 }
 
-/* It uses blake3_xof() as hash function */
+/* It uses generic hash function */
 std::vector<size_t> Set::bloom_filter_indices(const size_t element, 
-    size_t bin_count, size_t hash_count, const std::string hash_func) {
+    size_t bin_count, size_t hash_count, const std::string hash_func) const {
     std::vector<size_t> indices;
-    boost::hash<size_t> boost_hasher;
-    size_t tmp_element;
+
+    std::vector<uint8_t> element_bytes(sizeof(element));
+    std::memcpy(element_bytes.data(), &element, sizeof(element));  // Convert element to bytes
+
     for (size_t i = 0; i < hash_count; i++) {
-        tmp_element = element + i;
-        uint8_t *seed = reinterpret_cast<uint8_t*>(&tmp_element);
-        auto hash_out = generic_hash_func(hash_func, seed, sizeof(size_t)); //blake3_xof(seed, sizeof(size_t));
-        size_t hash = *reinterpret_cast<size_t*>(hash_out.data());
-        indices.push_back(hash % bin_count);
+        auto hash_out = generic_hash_func(hash_func, element_bytes.data(), element_bytes.size() + i);
+        size_t hash = extract_hash_value(hash_out) % bin_count;
+        indices.push_back(hash);
     }
 
     return indices;
@@ -124,15 +161,51 @@ void Set::insert(size_t element) {
 }
 
 // Convert the set into a Bloom filter representation
-std::vector<bool> Set::to_bloom_filter(size_t bin_count, size_t hash_count, std::string hash_func) const {
+std::vector<bool> Set::to_bloom_filter2(size_t bin_count, size_t hash_count, std::string hash_func) const {
     std::vector<bool> bloom_filter(bin_count, false);
 
     for (size_t element : elements) {
-        auto indices = Set::bloom_filter_indices(element, bin_count, hash_count, hash_func);
+        auto indices = bloom_filter_indices(element, bin_count, hash_count, hash_func);
         for (size_t idx : indices) {
             bloom_filter[idx] = true;
         }
     }
 
     return bloom_filter;
+}
+
+
+std::vector<std::vector<size_t>> Set::bloom_filter_indices(size_t bin_count, size_t hash_count, const std::string hash_func) const {
+    std::vector<std::vector<size_t>> indices;
+    std::size_t bit_array_size = compute_optimal_bit_size(elements.size(), bin_count);
+
+    for (const auto& element : elements) {
+        std::vector<size_t> indic;
+        std::vector<uint8_t> element_bytes(sizeof(element));
+        std::memcpy(element_bytes.data(), &element, sizeof(element));  // Convert element to bytes
+
+        for (std::size_t i = 0; i < hash_count; ++i) {
+            std::vector<uint8_t> hash_result = generic_hash_func(hash_func, element_bytes.data(), element_bytes.size() + i);
+            std::size_t hash_value = extract_hash_value(hash_result) % bit_array_size;
+            indic.push_back(hash_value % bin_count); // Map indices to bin count
+        }
+        indices.push_back(indic);
+    }
+    return indices;
+}
+
+std::vector<bool> Set::to_bloom_filter(size_t bin_count, size_t hash_count, std::string hash_func) const {
+    std::size_t bit_array_size = compute_optimal_bit_size(elements.size(), bin_count);
+    std::vector<bool> bit_array(bit_array_size, false);  // Bit array initialized with false
+
+    for (const auto& element : elements) {
+        std::vector<uint8_t> element_bytes(sizeof(element));
+        std::memcpy(element_bytes.data(), &element, sizeof(element));  // Convert element to bytes
+        for (std::size_t i = 0; i < hash_count; ++i) {
+            auto hash_out = generic_hash_func(hash_func, element_bytes.data(), element_bytes.size() + i);
+            size_t hash_value = extract_hash_value(hash_out) % bit_array_size;
+            bit_array[hash_value] = true;
+        }
+    }
+    return bit_array;
 }
