@@ -42,7 +42,8 @@ public:
 	void free_client();
 	GrantComp_Info * grant_comp(CompPerm_Request* , bigint **&qq, bool);
 	vector <string> find_intersection(Server_Result* res, int*& size, bigint*** Q, int number_of_clients);
-	void outsource_db(string & poly_ID);
+	//void outsource_db(string & poly_ID);
+	size_t outsource_db(string & poly_ID);
 	string update(bigint elem, string delete_insert, bigint & label, string id);
 	CompPerm_Request * gen_compPerm_req(uint8_t (& tmp_key_)[AES::DEFAULT_KEYLENGTH], uint8_t (& tmp_iv_)[AES::BLOCKSIZE]);
 

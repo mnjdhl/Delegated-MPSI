@@ -5,6 +5,10 @@
 */
 
 #include"Client.h"
+
+extern size_t sizeOfBigIntList(bigint *lst, int n);
+extern size_t calSizeofOutsourcingData(Client_Dataset *db, int tabsz);
+
 //**********************************************************************
 // - Description:  Constructor- It generates the following private keys: seed,
 // BF_key_, label_key, shuffle_key.
@@ -538,7 +542,7 @@ bigint* Client::convert_BF_to_bigint(bloom_filter filter){
 	for(int i = 0; i < size; i++){
 		ar[i] = filter.bit_table_[i];
 	}
-	cout<<"Bloom Filter: Bit table size = "<<size<< " Element Count = "<<filter.element_count() <<" size = "<<filter.size()<<" Hash Count = "<<filter.hash_count()<<"\n"; 
+	//cout<<"Bloom Filter: Bit table size = "<<size<< " Element Count = "<<filter.element_count() <<" size = "<<filter.size()<<" Hash Count = "<<filter.hash_count()<<"\n"; 
 	mpz_init(res[0]);
 	mpz_import(res[0], sizeof(ar), 1, sizeof(ar[0]), 0, 0, ar);// converts the array of bytes to a biginteger.
 	return res;
@@ -708,7 +712,8 @@ void Client::get_tablesize(){
 }
 //**********************************************************************
 // - Function description: prepare the set elements and sends a blinded dataset to the server.
-void Client::outsource_db(string& poly_ID){
+//void Client::outsource_db(string& poly_ID){
+size_t Client::outsource_db(string& poly_ID){
 
 	Client_Dataset db;
 	bigint minus_one, *blinded_BF, *bigint_BF;
@@ -717,7 +722,9 @@ void Client::outsource_db(string& poly_ID){
 	if(poly_ID == "B_ID"){ // this is done only for test-- so it can be tested on devices with small memory-- it can be commented out.
     	bigint_BF = assing_BFs2HT(HT, NoElem_in_bucket, table_size, bf_parameters); // assigns a bloom filters to each bin. It returns an array of bigint representing bloom filters.
     	blinded_BF = blind_BFs_(bigint_BF, table_size , BF_key_, BF_iv, pr_moduli);
+		//cout<<"outsource_db:table_size="<<table_size<<"\n";//debug
     	db.BF = PR_shuffle(blinded_BF, table_size, shuffle_key); // permutes the array of bigintegers and stores the result in Client_Dataset that will be sent to the server.
+		//cout<<"outsource_db:sizeOfBigIntList="<<sizeOfBigIntList(db.BF, table_size)<<" sizeof="<<sizeof(db.BF)<<"\n";
 	}
 	//sets parameters to represent each bin by a polynomial
 	Polynomial *poly;
@@ -743,6 +750,9 @@ void Client::outsource_db(string& poly_ID){
 	db.poly = PR_shuffle_poly(poly, table_size, shuffle_key);
 	db.client_ID = poly_ID;
 	serv->store_poly(db);
+	//cout<<"outsource_db: calling calSizeofOutsourcingData, with table_size="<<table_size<<"\n";
+	size_t out_sz = calSizeofOutsourcingData(&db, table_size); //serv->get_table_size()
+	//cout<<"outsource_db:out_sz = "<<out_sz<<"\n";
   	delete[] poly;
   	free(labels);
   	if(poly_ID == "B_ID"){
@@ -751,6 +761,8 @@ void Client::outsource_db(string& poly_ID){
 	}
 	mpz_clear(minus_one);
 	HT.clear();
+
+	return out_sz;
 }
 //**********************************************************************
 // - Function description: generates a request for PSI computation. This request is created by the result recipient client and
@@ -814,6 +826,7 @@ GrantComp_Info * Client::grant_comp(CompPerm_Request* com_req, bigint **&qq, boo
   	unsigned char der_key_1[key_size];
   	unsigned char der_key_2[key_size];
   	double start_grant_300 = clock();
+	cout<<"grant_comp:table_size="<<table_size<<"\n";
   	for(int i = 0; i < table_size; i++){
 		e.SetKeyWithIV(temp_key, key_size, temp_iv);
 		v_A[i] = (mpz_t*)malloc(xpoint_size * sizeof(mpz_t));

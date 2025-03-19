@@ -9,6 +9,173 @@
 #include "Client.h"
 #include "common.hpp"
 
+const size_t ONE_MB = 1000000;
+
+std::ofstream open_stats_file(std::string filename) {
+	std::ofstream lfile(filename, std::ios::app);
+	if (!lfile.is_open()) {
+		std::cerr << "Error: Unable to open results file " << filename << "\n";
+	}
+	return lfile;
+}
+
+size_t calculateStringSize(const std::string& str) {
+    return sizeof(str) + (str.capacity() >= sizeof(std::string) ? str.capacity() + 1 : 0);
+}
+
+size_t calculateSizeofMap(const std::unordered_map<std::string, int>& myMap) {
+    size_t size = sizeof(myMap); // Base unordered_map structure
+
+    for (const auto& [key, value] : myMap) {
+        size += sizeof(std::pair<const std::string, int>); // Size of each node
+        size += key.capacity(); // Account for dynamically allocated string memory
+    }
+
+    return size;
+}
+
+size_t sizeOfBigIntList(bigint *lst, int n) {
+	size_t size = 0;
+
+	// r: Array of mpz_t* pointers
+	size += sizeof(bigint) * n;
+
+	// Size of each mpz_t instance (metadata + actual number storage)
+	for (size_t i = 0; i < n; i++) {
+		size += (mpz_sizeinbase(lst[i], 2) + 7) / 8; // Byte size of actual number
+	}
+
+	return size;
+}
+
+size_t sizeOfBigIntTable(bigint **tab, int r_rows, int r_cols) {
+	size_t size = 0;
+
+	// r: Array of mpz_t* pointers
+	size += sizeof(bigint*) * r_rows;
+
+	// Size of each mpz_t instance (metadata + actual number storage)
+	for (size_t i = 0; i < r_rows; i++) {
+		if (tab[i] != nullptr) {
+			size += sizeof(bigint) * r_cols; // Metadata for each mpz_t
+			for (size_t j = 0; j < r_cols; j++) {
+				size += (mpz_sizeinbase(tab[i][j], 2) + 7) / 8; // Byte size of actual number
+			}
+		}
+	}
+
+	return size;
+}
+
+size_t calSizeofOutsourcingData(Client_Dataset *db, int tabsz) {
+
+	/*
+	struct Client_Dataset{
+		Polynomial* poly;// an array of polynomials
+		bigint* labels;// an array of labels
+		bigint* BF;//array of blinded bloom filters
+		unordered_map <string, int> label_Index_map;
+		string  client_ID;
+	};
+	*/
+	size_t size = 0;
+
+	size += sizeof(db->poly->val_size) + sizeOfBigIntList(db->poly->values, db->poly->val_size);
+
+	
+	size += sizeOfBigIntList(db->labels, tabsz);
+	if (db->client_ID=="B_ID")
+		size += sizeOfBigIntList(db->BF, tabsz);
+	else
+		size += sizeOfBigIntList(db->BF, 2);
+
+	size += calculateSizeofMap(db->label_Index_map);
+	size += calculateStringSize(db->client_ID);
+	return size;
+}
+
+size_t calSizeofServerResultData(Server_Result *res, int r_rows, int r_cols) {
+	/*
+	struct Server_Result{
+
+		bigint** result;// an array of permuted bins of a hash table.
+		bigint* BF;// an array of blinded Bloom filters.
+	};
+	*/
+
+	size_t size = 0;
+
+	size += sizeOfBigIntTable(res->result, r_rows, r_cols);
+	size += sizeOfBigIntList(res->BF, r_rows);
+
+	return size;
+}
+
+size_t calSizeofCompPermReqData(CompPerm_Request *cpr, int r_rows, int r_cols) {
+	/*
+	struct CompPerm_Request{
+		string id;
+		bigint**r;//blinded blinding factors
+		uint8_t label_key_[AES::DEFAULT_KEYLENGTH];
+		uint8_t label_iv[AES::BLOCKSIZE];
+		bigint shuffle_key_;
+	};
+	*/
+
+	size_t size = 0;
+
+    // Fixed-size members
+    size += sizeof(cpr->label_key_);
+    size += sizeof(cpr->label_iv);
+    size += sizeof(bigint); // Metadata size of shuffle_key_
+
+    // String size
+    size += calculateStringSize(cpr->id);
+
+	size += sizeOfBigIntTable(cpr->r, r_rows, r_cols);
+
+    // Size of shuffle_key_ number storage
+    size += (mpz_sizeinbase(cpr->shuffle_key_, 2) + 7) / 8;
+
+    return size;
+}
+
+size_t calSizeofGrantCompInfoData(GrantComp_Info **gci, int n, int r_rows, int r_cols) {
+	/*
+	struct GrantComp_Info{
+		string* id;// the result reciepent id is in id[0].
+		uint8_t seed[AES::DEFAULT_KEYLENGTH];
+		uint8_t iv[AES::BLOCKSIZE];
+		bigint** pm; // permutation map
+	};
+	*/
+
+	size_t size = 0;
+
+	for (int i=0; i<n;i++) {
+		// Fixed-size members
+		size += sizeof(gci[i]->seed);
+		size += sizeof(gci[i]->iv);
+
+
+		// String size
+		for (int j=0;j<2;j++) {
+			size += calculateStringSize(gci[i]->id[j]);
+		}
+
+		size += sizeOfBigIntTable(gci[i]->pm, r_rows, r_cols);
+		/*if (gci[i]->id[0]=="B_ID")
+			size += sizeOfBigIntTable(gci[i]->pm, r_rows, r_cols);
+		else
+			size += sizeOfBigIntTable(gci[i]->pm, r_rows, 2);
+		*/
+		//size += sizeOfBigIntTable(gci[i]->pm, r_rows, 2);
+	}
+
+    return size;
+}
+
+
 //**********************************************************************
 // - Function description: generates a set of random bigintegers,
 // and ensures that the values are smaller than the public moduli and unequal to x-coordinates.
@@ -76,6 +243,8 @@ bigint* gen_randSet (int size, int max_bitsize, bigint* pubModuli, bigint* x_poi
 Options &g_options = *(new Options());
 
 int main(int argc, char* argv[]) {
+
+	auto stfile = open_stats_file("stats1.out");
     // Parse options
     auto opt = parse_options(argc, argv);
     if (!opt) return 1;
@@ -120,6 +289,7 @@ int main(int argc, char* argv[]) {
 	double end_out_1 = 0;
 	double sum_1 = 0;
 	double diff_b = 0;
+	size_t outsourcing_comm_size=0, comp_req_comm_size=0, server_result_size=0, grant_comp_info_size=0;
 	for(int l = 0;l < number_of_experiments; l++){
 		Server serv(xsize, number_of_clients, pub_mod_bitsize, max_setsize , bucket_max_load, table_length);
 		Server * serv_ptr (& serv);
@@ -163,7 +333,8 @@ int main(int argc, char* argv[]) {
 		bigint label;
 		cout<<"\n----------------- Client B outsourcing -----------------"<<endl;
 		double start_out_b = clock();
-		B.outsource_db(b_id);
+		//B.outsource_db(b_id);
+		outsourcing_comm_size +=B.outsource_db(b_id); // via calSizeofOutsourcingData()
 		double end_out_b = clock();
 		diff_b = end_out_b - start_out_b;
 		cout<<"\n----------------- Clients are outsourcing -----------------"<<endl;
@@ -208,6 +379,11 @@ int main(int argc, char* argv[]) {
 		CompPerm_Request* req = B.gen_compPerm_req(B_tk, B_tIV);
 		double end_req = clock();
 		temp_req += end_req - start_req;
+		
+		/********************/
+		comp_req_comm_size += calSizeofCompPermReqData(req, serv.get_table_size(), xsize);
+		/********************/
+
 		cout<<"\n---- Grant the Computation Done"<<endl;
 		GrantComp_Info** ptr;
 		ptr = new GrantComp_Info*[number_of_clients - 1];
@@ -232,6 +408,12 @@ int main(int argc, char* argv[]) {
 		Server_Result * res = serv.compute_result(ptr, B_tk, B_tIV);
 		double end_res = clock();
 		temp_res += end_res - start_res;
+
+		/********************/
+		server_result_size += calSizeofServerResultData(res, serv.get_table_size(), xsize);
+		grant_comp_info_size += calSizeofGrantCompInfoData(ptr, number_of_clients-1, serv.get_table_size(), 2); //xsize);
+		/********************/
+		
 		//-----Just to free some memory----
 		cout<<"\n cleanging the server"<<endl;
 		serv.free_server();
@@ -250,12 +432,15 @@ int main(int argc, char* argv[]) {
 	cout<<"\n\n\t============= Run time ==================="<<endl;
 	double out = diff_b  /number_of_experiments;
 	float out_time = out / (double) CLOCKS_PER_SEC;
+	cout<<"Outsourcing comm cost = "<<(outsourcing_comm_size/ONE_MB)/out_time<<"\n";
 	cout<<"\n\n Outsourcing-- time:"<<out_time<<endl;
 	double com_req = temp_req / number_of_experiments;
 	float req_time = com_req / (double) CLOCKS_PER_SEC;
+	cout<<"Computation Request comm cost = "<<(comp_req_comm_size/ONE_MB)/req_time<<"\n";
 	cout<<"\n\n Computation Request-- time:"<<req_time<<endl;
 	double grant = temp_grant / number_of_experiments;
 	float grant_time = grant / (double) CLOCKS_PER_SEC;
+	cout<<"Computation Grant comm cost = "<<(grant_comp_info_size/ONE_MB)/grant_time<<"\n";
 	cout<<"\n\n Computation Grant-- time:"<<grant_time<<endl;
 	double res_= temp_res / number_of_experiments;
 	float res_time = res_ / (double) CLOCKS_PER_SEC;
@@ -264,7 +449,11 @@ int main(int argc, char* argv[]) {
 	float inter_time = inter / (double) CLOCKS_PER_SEC;
 	cout<<"\n\n Find intersection-- time:"<<inter_time<<endl;
 	cout<<"\n\n\t============================================"<<endl;
-
+	size_t tot_data_sent = (outsourcing_comm_size + comp_req_comm_size + server_result_size + grant_comp_info_size)/ONE_MB;
+	double avg_tot_data_sent = double(tot_data_sent)/double(number_of_experiments);
+	cout<<"Average total data sent = "<<avg_tot_data_sent<<" MB"<<"\n";
+	stfile<<max_setsize<<", "<<number_of_clients<<", "<<avg_tot_data_sent<<"\n";
+	stfile.close();
 //-----------End of Set intersection------------
 	// Free options
 	delete &g_options;
