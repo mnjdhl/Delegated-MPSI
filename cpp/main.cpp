@@ -85,7 +85,12 @@ int main(int argc, char* argv[]) {
       //                                 ? FullMesh::new_default()
         //                               : FullMesh::new_with_overhead(g_options.latency, g_options.bytes_per_sec);
 
+    /*
     FullMesh network_description = (g_options.latency == 0.0 && g_options.bytes_per_sec == 0.0)
+                                        ? FullMesh::new_default()
+                                        : FullMesh(g_options.latency, g_options.bytes_per_sec, g_options.party_count);
+    */
+    FullMesh network_description = (g_options.latency < 0.0 || g_options.bytes_per_sec < 0.0)
                                         ? FullMesh::new_default()
                                         : FullMesh(g_options.latency, g_options.bytes_per_sec, g_options.party_count);
     // Run the protocol

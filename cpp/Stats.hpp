@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <filesystem>
 #include "common.hpp"
 
 class Stats {
@@ -11,6 +12,7 @@ private:
     size_t total_repetitions;
     std::string filename;
     std::ofstream file;  // File stream for CSV logging
+    std::filesystem::path fpath;
     #if 0
     std::map<int, std::vector<double>> xor_exec_times;
     std::map<int, std::vector<double>> xof_exec_times;
@@ -20,12 +22,14 @@ private:
     std::vector<double> xor_exec_times;
     std::vector<double> xof_exec_times;
     std::vector<double> bloomfilter_exec_times;
+    std::map<int, double>compute_breakdown_times;
 
 public:
     enum OPS {
         XOR_OP,
         XOF_OP,
-        BLOOMFILTER_OP
+        BLOOMFILTER_OP,
+        COMPUTE_BREAKDOWN,
     };
 
     ~Stats() {
@@ -35,12 +39,12 @@ public:
         }
     }
     Stats(size_t repetitions, const std::string& results_filename)
-        : total_repetitions(repetitions), filename(results_filename) {
+        : total_repetitions(repetitions), filename(results_filename), fpath(results_filename) {
         if (!g_options.stats) {
             return;
         }
         // Open file and write CSV header
-        std::ofstream lfile(filename, std::ios::trunc);
+        std::ofstream lfile(filename, std::ios::app);
         if (!lfile.is_open()) {
             std::cerr << "Error: Unable to open results file " << filename << "\n";
             return;
@@ -49,7 +53,7 @@ public:
         //lfile.close();
     }
 
-    Stats(const std::string& filename) : file(filename, std::ios::app) {
+    Stats(const std::string& filename) : file(filename, std::ios::app), filename(filename), fpath(filename) {
         if (!g_options.stats) {
             return;
         }
@@ -100,9 +104,22 @@ public:
 
     void output_party_csv() {
         if (!file.is_open()) {
-            file.open(filename, std::ios::trunc);
+            file.open(filename, std::ios::app);
             if (!file.is_open())
                 throw std::ios_base::failure("Failed to open file: " + filename);
+        }
+
+        if (compute_breakdown_times.size() > 0) {
+            if (std::filesystem::file_size(fpath) <= 0) {
+                file<<"Set Size, Party Count, Hash Count, Server Side (s), Query Servers (s), Clients (s)\n";
+            }
+            file<<g_options.set_size<<", "<<g_options.party_count<<", ";
+            file<<g_options.hash_count<<", ";
+            file<<(compute_breakdown_times[0]/g_options.repetitions)/1000<<", ";
+            file<<(compute_breakdown_times[1]/g_options.repetitions)/1000<<", ";
+            file<<(compute_breakdown_times[2]/g_options.repetitions)/1000<<"\n";
+
+            return;
         }
 
     #if 0
@@ -199,6 +216,13 @@ public:
                 break;
             case BLOOMFILTER_OP:
                 bloomfilter_exec_times.push_back(duration);
+                break;
+            case COMPUTE_BREAKDOWN:
+                if (party_id < 2) {
+                    compute_breakdown_times[party_id] +=duration;
+                } else {
+                    compute_breakdown_times[2] +=duration;
+                }
                 break;
         }
     }

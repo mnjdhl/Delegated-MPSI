@@ -27,7 +27,7 @@ do
     for PartyCount in ${Parties[@]}
     do
         #msg="Running for Set Size=$SetSize, Party Count=$PartyCount and Hash Function=$HashFunc"
-        cmd="../delegated_mpsi -n $PartyCount -k $SetSize -u $DomainSize -m $BinCount -s $HashCount -c $HashFunc  -l $Latency -b $BytesPerSec -r $Repetitions -f $FileName"
+        cmd="../delegated_mpsi -n $PartyCount -k $SetSize -u $DomainSize -m $BinCount -s $HashCount -c $HashFunc  -l $Latency -b $BytesPerSec -r $Repetitions -f $FileName -t 1"
         echo $cmd
         TIME=$( { /usr/bin/time -f "%e" $cmd > /dev/null; } 2>&1 )
         avg_time=$(jq -n $TIME/$Repetitions)

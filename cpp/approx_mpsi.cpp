@@ -144,9 +144,13 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
         std::vector<std::optional<Set>> outputs;
         outputs.reserve(parties.size());
         /* for (size_t id = 0; id < party_count; id++) { */
-        for (size_t id = 0; id < party_count-1; id++) { //TBD:Is this okay??
+        //for (size_t id = 0; id < party_count-1; id++) { //TBD:Is this okay??
+        for (int id = party_count-2; id >=0; id--) {
             if (parties[id] == nullptr) continue;  // Skip parties that are not part of the protocol
+            auto start_time = std::chrono::steady_clock::now();
             auto out = parties[id]->run(id, party_count, inputs[id], network.get_channels(id));
+            auto end_time = std::chrono::steady_clock::now();
+            stats.log_duration(Stats::OPS::COMPUTE_BREAKDOWN, id, start_time, end_time);
             outputs.push_back(std::move(out));
         }
 
