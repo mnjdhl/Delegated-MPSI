@@ -7,6 +7,9 @@
 #include <array>
 #include <cstdint>
 
+// Constants
+constexpr size_t SHARE_BYTE_COUNT = 64;
+
 // Helper class for SIMD-like operations
 /*class SimdBytes {
 public:
@@ -33,16 +36,19 @@ public:
 };*/
 
 class SimdBytes {
-    std::vector<std::array<__m128i, 4>> bytes; // Each 512-bit chunk is split into 4x128-bit chunks
+    //std::vector<std::array<__m128i, 4>> bytes; // Each 512-bit chunk is split into 4x128-bit chunks
     //std::string hash_func;
-
     public:
+    std::vector<uint8_t> bytes;
+
+    #if 0
     // Default constructor
     /*SimdBytes() {
         hash_func = "blake3_xof";
     }
     SimdBytes(std::string hash_func) : hash_func(hash_func) {}
     */
+   void resize(size_t byte_count);
     // Convert raw bytes into SimdBytes
     static SimdBytes from_bytes(const std::vector<uint8_t>& data);
 
@@ -62,26 +68,75 @@ class SimdBytes {
      */
 
      // Convert SimdBytes into byte chunks
-template <const size_t ChunkSize>
-    std::vector<std::array<uint8_t, ChunkSize>> to_byte_chunks() const {
-    std::vector<std::array<uint8_t, ChunkSize>> result;
-    result.reserve(bytes.size());
+    template <const size_t ChunkSize>
+        std::vector<std::array<uint8_t, ChunkSize>> to_byte_chunks() const {
+        std::vector<std::array<uint8_t, ChunkSize>> result;
+        result.reserve(bytes.size());
 
-    for (const auto& chunk : bytes) {
-        std::array<uint8_t, ChunkSize> byte_chunk;
-        for (size_t i = 0; i < 4; ++i) {
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(&byte_chunk[i * 16]), chunk[i]);
+        for (const auto& chunk : bytes) {
+            std::array<uint8_t, ChunkSize> byte_chunk;
+            for (size_t i = 0; i < 4; ++i) {
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(&byte_chunk[i * 16]), chunk[i]);
+            }
+            result.push_back(byte_chunk);
         }
-        result.push_back(byte_chunk);
-    }
 
-    return result;
-}
+        return result;
+    }
+    #endif
+
+    SimdBytes() = default;
+
+    SimdBytes(size_t byte_count);
+
+    void resize(size_t byte_count);
+
+    size_t size() const;
+
+    void fill(uint8_t value);
+
+    // Convert raw bytes into SimdBytes
+    static SimdBytes from_bytes(const std::vector<uint8_t>& data);
+    // Convert SimdBytes back to raw bytes
+    std::vector<uint8_t> to_bytes() const;
+
+    // Convert SimdBytes into byte chunks
+    template <const size_t ChunkSize>
+    std::vector<std::array<uint8_t, ChunkSize>> to_byte_chunks() const {
+        std::vector<std::array<uint8_t, ChunkSize>> result;
+
+        // Ensure bytes.size() is a multiple of ChunkSize
+        assert(bytes.size() % ChunkSize == 0 && "Bytes size must be divisible by chunk size");
+
+        size_t num_chunks = bytes.size() / ChunkSize;
+        result.reserve(num_chunks);
+
+        for (size_t i = 0; i < num_chunks; ++i) {
+            std::array<uint8_t, ChunkSize> chunk{};
+            std::copy_n(bytes.begin() + i * ChunkSize, ChunkSize, chunk.begin());
+            result.push_back(chunk);
+        }
+
+        return result;
+    }
+    // XOR operation for SimdBytes
+    SimdBytes& operator^=(const SimdBytes& other);
+
+    SimdBytes operator^(const SimdBytes& other) const;
+
+    bool operator==(const SimdBytes& other) const;
+
+    SimdBytes select(const std::vector<uint8_t>& mask, const SimdBytes& true_values, const SimdBytes& false_values);
 };
 
 SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count);
 SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count);
-SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector<bool>& conditions);
+//SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector<bool>& conditions);
 SimdBytes create_zero_share(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count, std::string hash_func);
 
+SimdBytes conditionally_corrupt_share(
+    const SimdBytes& share,
+    const std::vector<bool>& conditions,
+    size_t chunk_size=SHARE_BYTE_COUNT  // Usually SHARE_BYTE_COUNT
+);
 #endif // SECRET_SHARING_SIMD_HPP

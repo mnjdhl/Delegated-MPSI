@@ -1,9 +1,12 @@
 #include "FullMesh.hpp"
 #include <stdexcept>
 #include <iostream>
-
+#include <sstream>
+#include "common.hpp"
+#include "Stats.hpp"
 using namespace std::chrono_literals;
 
+extern Stats g_stats;
 // Define static members
 std::unordered_map<size_t, std::unordered_map<size_t, std::queue<std::vector<uint8_t>>>> FullMesh::network;
 std::mutex FullMesh::network_mutex;
@@ -14,8 +17,8 @@ FullMesh::FullMesh(double latency_seconds, double bytes_per_sec)
         initialize_channels();
     }
 
-FullMesh::FullMesh(double latency_seconds, double bytes_per_sec, size_t party_count)
-    : latency_seconds(latency_seconds), bytes_per_sec(bytes_per_sec), party_count(party_count) {
+FullMesh::FullMesh(double latency_seconds, double bytes_per_sec, size_t party_count /*, Stats & pstats*/)
+    : latency_seconds(latency_seconds), bytes_per_sec(bytes_per_sec), party_count(party_count) /*, stats(pstats)*/ {
         initialize_channels();
     }
 
@@ -67,8 +70,49 @@ void FullMesh::send(size_t sender_id, size_t recipient_id, const std::vector<uin
     network[recipient_id][sender_id].push(data);
 }
 
+void FullMesh::send(size_t sender_id, size_t recipient_id, const std::vector<std::vector<size_t>>& data) {
+    std::ostringstream oss;
+    size_t outer_size = data.size();
+    oss.write(reinterpret_cast<const char*>(&outer_size), sizeof(size_t));
+
+    for (const auto& vec : data) {
+        size_t inner_size = vec.size();
+        oss.write(reinterpret_cast<const char*>(&inner_size), sizeof(size_t));
+
+        for (size_t val : vec) {
+            oss.write(reinterpret_cast<const char*>(&val), sizeof(size_t));
+        }
+    }
+
+    std::string serialized = oss.str();
+    send(sender_id, recipient_id, std::vector<uint8_t>(serialized.begin(), serialized.end()));
+}
+
+
+void FullMesh::send(size_t sender_id, size_t recipient_id, const std::vector<bool>& data) {
+    std::vector<uint8_t> byte_data((data.size() + 7) / 8, 0);  // Allocate bytes (8 bools per byte)
+
+    for (size_t i = 0; i < data.size(); ++i) {
+        if (data[i]) {
+            byte_data[i / 8] |= (1 << (i % 8));  // Set the corresponding bit
+        }
+    }
+
+    send(sender_id, recipient_id, byte_data);  // Send as raw bytes
+}
+
+
 // Receive a message from a sender party
 std::vector<uint8_t> FullMesh::receive(size_t receiver_id, size_t sender_id) {
+
+    auto start_time = std::chrono::steady_clock::now();
+    /* Wait till data is available  */
+    while (!can_receive(receiver_id, sender_id)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    auto end_time = std::chrono::steady_clock::now();
+    g_stats.log_duration(Stats::OPS::COMPUTE_BREAKDOWN_WAITTIME, receiver_id, start_time, end_time);
+
     std::lock_guard<std::mutex> lock(network_mutex);
 
     auto& queue = network[receiver_id][sender_id];
@@ -80,6 +124,41 @@ std::vector<uint8_t> FullMesh::receive(size_t receiver_id, size_t sender_id) {
     std::vector<uint8_t> message = queue.front();
     queue.pop();
     return message;
+}
+
+void FullMesh::receive(size_t receiver_id, size_t sender_id, std::vector<std::vector<size_t>>& data) {
+    std::vector<uint8_t> raw_bytes;
+    raw_bytes = receive(receiver_id, sender_id);
+
+    std::istringstream iss(std::string(raw_bytes.begin(), raw_bytes.end()));
+    size_t outer_size = 0;
+    iss.read(reinterpret_cast<char*>(&outer_size), sizeof(size_t));
+
+    data.resize(outer_size);
+    for (size_t i = 0; i < outer_size; ++i) {
+        size_t inner_size;
+        iss.read(reinterpret_cast<char*>(&inner_size), sizeof(size_t));
+        data[i].resize(inner_size);
+
+        for (size_t j = 0; j < inner_size; ++j) {
+            iss.read(reinterpret_cast<char*>(&data[i][j]), sizeof(size_t));
+        }
+    }
+}
+
+void FullMesh::receive(size_t receiver_id, size_t sender_id, std::vector<bool>& data) {
+    std::vector<uint8_t> byte_data;
+    byte_data = receive(receiver_id, sender_id);  // Get raw bytes
+
+    data.resize(byte_data.size() * 8, false);  // Resize to match original bool count
+
+    for (size_t i = 0; i < data.size(); ++i) {
+        data[i] = (byte_data[i / 8] & (1 << (i % 8))) != 0;  // Extract each bit
+    }
+}
+
+bool FullMesh::can_receive(size_t receiver_id, size_t sender_id) {
+    return !network[receiver_id][sender_id].empty();
 }
 
 Channels& FullMesh::get_channels(size_t party_id) const {

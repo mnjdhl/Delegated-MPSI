@@ -9,6 +9,7 @@
 #include <chrono>
 #include <thread>
 #include "Channels.hpp"
+#include "Stats.hpp"
 
 class FullMesh {
 public:
@@ -20,7 +21,7 @@ public:
         return FullMesh(latency, bytes_per_sec);
     }
     
-    FullMesh(double latency_seconds, double bytes_per_sec, size_t party_count);
+    FullMesh(double latency_seconds, double bytes_per_sec, size_t party_count /*, Stats & stats*/);
 
 
     /*FullMesh(std::vector<std::unique_ptr<Channels>>&& channels);*/
@@ -37,10 +38,16 @@ public:
 
     // Send a message to a specific party
     void send(size_t sender_id, size_t recipient_id, const std::vector<uint8_t>& data);
+    void send(size_t sender_id, size_t recipient_id, const std::vector<std::vector<size_t>>& data);
+    void send(size_t sender_id, size_t recipient_id, const std::vector<bool>& data);
 
     // Receive a message from a specific party
     std::vector<uint8_t> receive(size_t receiver_id, size_t sender_id);
+    void receive(size_t receiver_id, size_t sender_id, std::vector<std::vector<size_t>>& data);
+    void receive(size_t receiver_id, size_t sender_id, std::vector<bool>& data);
 
+    bool can_receive(size_t receiver_id, size_t sender_id);
+    
     // Returns a reference to the communication channels
     Channels& get_channels(size_t party_id) const;
 
@@ -56,6 +63,7 @@ private:
 
     // Mutex for thread safety
     static std::mutex network_mutex;
+    //Stats stats;
     
         // Constructor with optional latency and bandwidth constraints
     FullMesh(double latency_seconds = 0.0, double bytes_per_sec = 0.0);

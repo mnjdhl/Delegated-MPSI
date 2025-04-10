@@ -12,6 +12,8 @@
 #include "common.hpp"
 
 Options &g_options = *(new Options());
+Stats g_stats;
+// = *(new Stats(0, "results.csv"));
 
 std::optional<Options> parse_options(int argc, char* argv[]) {
     namespace po = boost::program_options;
@@ -80,6 +82,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    //Stats mstats = Stats(g_options.repetitions, g_options.results_filename);
+    g_stats = *(new Stats(g_options.repetitions, g_options.results_filename));
     // Initialize the network description
     //FullMesh network_description = (g_options.latency == 0.0 && g_options.bytes_per_sec == 0.0)
       //                                 ? FullMesh::new_default()
@@ -92,9 +96,9 @@ int main(int argc, char* argv[]) {
     */
     FullMesh network_description = (g_options.latency < 0.0 || g_options.bytes_per_sec < 0.0)
                                         ? FullMesh::new_default()
-                                        : FullMesh(g_options.latency, g_options.bytes_per_sec, g_options.party_count);
+                                        : FullMesh(g_options.latency, g_options.bytes_per_sec, g_options.party_count /*, g_stats*/);
     // Run the protocol
-    ApproximateMpsi protocol(g_options.bin_count, g_options.hash_count, g_options.hash_function, g_options.domain_size, g_options.set_size, g_options.results_filename);
+    ApproximateMpsi protocol(network_description, g_options.bin_count, g_options.hash_count, g_options.hash_function, g_options.domain_size, g_options.set_size /*, g_stats*/);
     /*Stats stats =*/ 
     protocol.evaluate("Experiment", g_options.party_count, network_description, g_options.repetitions);
 

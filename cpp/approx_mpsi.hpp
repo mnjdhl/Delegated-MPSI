@@ -20,20 +20,26 @@
 #include "hash_funcs.hpp"
 
 // Constants
-constexpr size_t SHARE_BYTE_COUNT = 5;
+//constexpr size_t SHARE_BYTE_COUNT = 5;
+
+typedef struct thread_data {
+    size_t id;
+    bool is_completed;
+    std::optional<Set> output;
+};
 
 class Party {
 public:
     virtual ~Party() = default;
     virtual std::optional<Set> run(size_t id, size_t n_parties, const std::optional<Set>& input,
-                                    Channels& channels) = 0;
+                                    Channels& channels, thread_data* th_data) = 0;
 };
 
 // ApproximateMpsi class: High-level protocol definition
 class ApproximateMpsi {
 public:
     // Constructor
-    ApproximateMpsi(size_t bin_count, size_t hash_count, std::string hash_func, size_t domain_size, size_t set_size, const std::string& results_filename);
+    ApproximateMpsi(FullMesh& net, size_t bin_count, size_t hash_count, std::string hash_func, size_t domain_size, size_t set_size /*, Stats& stats*/);
 
     std::vector<Set> gen_sets_with_uniform_intersection(size_t n_parties, size_t set_size, size_t domain_size);
     std::vector<std::optional<Set>> generate_inputs(size_t n_parties) /*const*/;
@@ -51,25 +57,27 @@ private:
     std::string hash_func;
     size_t domain_size;
     size_t set_size;
-    Stats stats;
+    //Stats& stats;
+    FullMesh& network;
 };
 
 // ApproximateMpsiParty class: Represents a single party in the protocol
 class ApproximateMpsiParty : public Party {
 public:
     // Constructor
-    ApproximateMpsiParty(std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func, Stats& stats);
+    ApproximateMpsiParty(FullMesh& net, std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func /*, Stats& stats*/);
 
     // Public interface
     //std::optional<Set> run(size_t id, size_t n_parties, const std::optional<Set>& input, 
     //                       Channels& channels);
-    std::optional<Set> run(size_t id, size_t n_parties, const Input& input, Channels& channels);
+    std::optional<Set> run(size_t id, size_t n_parties, const Input& input, Channels& channels, thread_data* th_data);
 private:
     std::vector<std::array<uint8_t, 16>> seeds;
     size_t bin_count;
     size_t hash_count;
     std::string hash_func;
-    Stats& stats;
+    //Stats& stats;
+    FullMesh& network;
 
     // Internal functions
     /*void run_server_approx(size_t n_parties, Channels& channels);

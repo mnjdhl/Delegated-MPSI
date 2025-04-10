@@ -1,3 +1,5 @@
+#ifndef STATS_HPP
+#define STATS_HPP
 #include <vector>
 #include <fstream>
 #include <iostream>
@@ -30,6 +32,7 @@ public:
         XOF_OP,
         BLOOMFILTER_OP,
         COMPUTE_BREAKDOWN,
+        COMPUTE_BREAKDOWN_WAITTIME,
     };
 
     ~Stats() {
@@ -38,6 +41,10 @@ public:
             if (file.is_open()) file.close();
         }
     }
+
+    // Default constructor
+    Stats() : total_repetitions(0), filename(""), fpath("") {}
+
     Stats(size_t repetitions, const std::string& results_filename)
         : total_repetitions(repetitions), filename(results_filename), fpath(results_filename) {
         if (!g_options.stats) {
@@ -65,6 +72,22 @@ public:
         }*/
     }
 
+    Stats& operator=(Stats& other) {
+        if (this != &other) {
+            execution_times = std::move(other.execution_times);
+            successful_runs = other.successful_runs;
+            total_repetitions = other.total_repetitions;
+            filename = std::move(other.filename);
+            file = std::move(other.file);
+            fpath = std::move(other.fpath);
+            xor_exec_times = std::move(other.xor_exec_times);
+            xof_exec_times = std::move(other.xof_exec_times);
+            bloomfilter_exec_times = std::move(other.bloomfilter_exec_times);
+            compute_breakdown_times = std::move(other.compute_breakdown_times);
+        }
+        return *this;
+    }
+    
     void log_result(size_t repetition, double exec_time, bool success) {
         if (!g_options.stats) {
             return;
@@ -115,11 +138,13 @@ public:
             }
             file<<g_options.set_size<<", "<<g_options.party_count<<", ";
             file<<g_options.hash_count<<", ";
+
+            //Time in seconds
             file<<(compute_breakdown_times[0]/g_options.repetitions)/1000<<", ";
             file<<(compute_breakdown_times[1]/g_options.repetitions)/1000<<", ";
             file<<(compute_breakdown_times[2]/g_options.repetitions)/1000<<"\n";
 
-            return;
+            //return;
         }
 
     #if 0
@@ -139,17 +164,26 @@ public:
             file <<"All times in ms\n";
         }
     #endif
+        auto filename2 = (filename.substr(0, filename.find(".")+1));
+        filename2.append("_II.");
+        filename2.append(filename.substr(filename.find(".")+1));
+        std::ofstream file2(filename2, std::ios::app);
+        if (!file2.is_open()) {
+            std::cerr << "Error: Unable to open results file " << filename2 << "\n";
+            return;
+        }
         double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
-        file << "XOR (in ms),    XOF (in ms),    BloomFilter (in ms)\n";
+        file2 << "XOR (in ms),    XOF (in ms),    BloomFilter (in ms)\n";
         for (int j=0; j<xor_exec_times.size(); j++) {
             file <<xor_exec_times[j]<<", "<<xof_exec_times[j]<<", "<<bloomfilter_exec_times[j]<< "\n";
             xor_sum += xor_exec_times[j];
             xof_sum += xof_exec_times[j];
             bloomfilter_sum += bloomfilter_exec_times[j];
         }
-        file<<"Sum: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
-        file << "Total: "<<xor_exec_times.size()<<", "<<xof_exec_times.size()<<", "<<bloomfilter_exec_times.size()<< "\n";
-        file << "Average: " << xor_sum/xor_exec_times.size() << ", " << xof_sum/xof_exec_times.size() << ", " << bloomfilter_sum/bloomfilter_exec_times.size() << "\n";
+        file2<<"Sum: "<<xor_sum<<", "<<xof_sum<<", "<<bloomfilter_sum<< "\n";
+        file2<< "Total: "<<xor_exec_times.size()<<", "<<xof_exec_times.size()<<", "<<bloomfilter_exec_times.size()<< "\n";
+        file2<< "Average: " << xor_sum/xor_exec_times.size() << ", " << xof_sum/xof_exec_times.size() << ", " << bloomfilter_sum/bloomfilter_exec_times.size() << "\n";
+        file2.close();
     }
 
     void log_experiment(size_t repetition, bool success) {
@@ -224,7 +258,15 @@ public:
                     compute_breakdown_times[2] +=duration;
                 }
                 break;
+            case COMPUTE_BREAKDOWN_WAITTIME:
+                if (party_id < 2) {
+                    compute_breakdown_times[party_id] -=duration;
+                } else {
+                    compute_breakdown_times[2] -=duration;
+                }
+                break;
         }
     }
 };
 
+#endif // STATS_HPP
