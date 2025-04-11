@@ -167,7 +167,7 @@ SimdBytes SimdBytes::select(const std::vector<uint8_t>& mask, const SimdBytes& t
 
 // Blake3-like Hash Expansion (placeholder for actual hashing)
 //SimdBytes xof(const std::vector<uint8_t>& seed, size_t byte_count) {
-SimdBytes xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
+SimdBytes xof(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count) {
     std::vector<uint8_t> expanded_bytes(byte_count);
     std::random_device rd;
     std::generate(expanded_bytes.begin(), expanded_bytes.end(), [&rd]() {
@@ -177,7 +177,7 @@ SimdBytes xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
 }
 
 // Function for XOF (Extendable Output Function) using BLAKE3
-SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
+SimdBytes blake3_xof(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count) {
     //auto start_time = std::chrono::steady_clock::now();
     // Initialize the BLAKE3 hasher and compute XOF
     blake3_hasher hasher;
@@ -192,7 +192,7 @@ SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count) {
 }
 
 // Function for XOF (Extendable Output Function) using BLAKE3
-SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count, std::string hash_func) {
+SimdBytes do_generic_hash(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count, std::string hash_func) {
 
     //auto expanded_bytes = generic_hash_func(hash_func, seed.data(), seed.size());
     auto expanded_bytes = generic_hash_func(hash_func, seed.data(), byte_count);
@@ -200,7 +200,7 @@ SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count
 }
 
 // Create Zero Share
-SimdBytes create_zero_share2(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count, std::string hash_func) {
+SimdBytes create_zero_share2(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func) {
     auto seeds_iterator = seeds.begin();
     SimdBytes share = do_generic_hash(*seeds_iterator, byte_count, hash_func); 
 
@@ -210,7 +210,7 @@ SimdBytes create_zero_share2(const std::vector<std::array<uint8_t, 16>>& seeds, 
     return share;
 }   
 
-SimdBytes create_zero_share(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count, std::string hash_func) {
+SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func) {
     SimdBytes share;
     auto sresize = seeds.size();
     share.resize(sresize);  // 🔹 Ensure correct size before filling data

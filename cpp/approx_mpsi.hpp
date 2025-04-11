@@ -66,14 +66,14 @@ private:
 class ApproximateMpsiParty : public Party {
 public:
     // Constructor
-    ApproximateMpsiParty(FullMesh& net, std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func /*, Stats& stats*/);
+    ApproximateMpsiParty(FullMesh& net, std::vector<std::array<uint8_t, RAND_SECRET_SIZE>> seeds, size_t bin_count, size_t hash_count, std::string hash_func /*, Stats& stats*/);
 
     // Public interface
     //std::optional<Set> run(size_t id, size_t n_parties, const std::optional<Set>& input, 
     //                       Channels& channels);
     std::optional<Set> run(size_t id, size_t n_parties, const Input& input, Channels& channels, thread_data* th_data);
 private:
-    std::vector<std::array<uint8_t, 16>> seeds;
+    std::vector<std::array<uint8_t, RAND_SECRET_SIZE>> seeds;
     size_t bin_count;
     size_t hash_count;
     std::string hash_func;

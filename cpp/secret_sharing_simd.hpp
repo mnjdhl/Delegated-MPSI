@@ -9,6 +9,7 @@
 
 // Constants
 constexpr size_t SHARE_BYTE_COUNT = 40; // 64;
+constexpr size_t RAND_SECRET_SIZE = 16; //SHARE_BYTE_COUNT ~5; // original- 16;
 
 // Helper class for SIMD-like operations
 /*class SimdBytes {
@@ -129,10 +130,10 @@ class SimdBytes {
     SimdBytes select(const std::vector<uint8_t>& mask, const SimdBytes& true_values, const SimdBytes& false_values);
 };
 
-SimdBytes blake3_xof(const std::array<uint8_t, 16>& seed, size_t byte_count);
-SimdBytes do_generic_hash(const std::array<uint8_t, 16>& seed, size_t byte_count);
+SimdBytes blake3_xof(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count);
+SimdBytes do_generic_hash(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count);
 //SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector<bool>& conditions);
-SimdBytes create_zero_share(const std::vector<std::array<uint8_t, 16>>& seeds, size_t byte_count, std::string hash_func);
+SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func);
 
 SimdBytes conditionally_corrupt_share(
     const SimdBytes& share,

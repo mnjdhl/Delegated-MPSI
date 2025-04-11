@@ -139,10 +139,15 @@ public:
             file<<g_options.set_size<<", "<<g_options.party_count<<", ";
             file<<g_options.hash_count<<", ";
 
+            auto tot_clients = g_options.party_count - 2;
             //Time in seconds
             file<<(compute_breakdown_times[0]/g_options.repetitions)/1000<<", ";
             file<<(compute_breakdown_times[1]/g_options.repetitions)/1000<<", ";
-            file<<(compute_breakdown_times[2]/g_options.repetitions)/1000<<"\n";
+            if (tot_clients <= 0) {
+                file<<0<<"\n";
+            } else {
+                file<<((compute_breakdown_times[2]/g_options.repetitions)/1000)/tot_clients<<"\n";
+            }
 
             //return;
         }

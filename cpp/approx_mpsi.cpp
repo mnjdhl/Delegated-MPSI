@@ -34,8 +34,8 @@ ApproximateMpsi::ApproximateMpsi(FullMesh& net, size_t minimum_bin_count, size_t
           }
 
 std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_parties) {
-    std::vector<std::vector<std::array<uint8_t, 16>>> party_seeds(n_parties - 1,
-                                                              std::vector<std::array<uint8_t, 16>>(n_parties - 1));
+    std::vector<std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>> party_seeds(n_parties - 1,
+                                                              std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>(n_parties - 1));
    
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -43,7 +43,7 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_part
 
     for (size_t i = 1; i < n_parties; ++i) {
         for (size_t j = i + 1; j < n_parties; ++j) {
-            std::array<uint8_t, 16> seed{};
+            std::array<uint8_t, RAND_SECRET_SIZE> seed{};
             for (auto& byte : seed) byte = dist(gen);
 
             party_seeds[i - 1][j - 1] = seed;
@@ -63,9 +63,8 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_part
 
 std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties2(size_t n_parties, size_t seeds_sz_factor) {
     //const size_t seeds_sz_factor = 314048; /* Size of the bloom filter*/
-    constexpr size_t SECRET_SIZE = 16; //SHARE_BYTE_COUNT ~5; // 16;
-    std::vector<std::vector<std::array<uint8_t, 16>>> party_seeds(n_parties, 
-                                                                std::vector<std::array<uint8_t, SECRET_SIZE>>(seeds_sz_factor));
+    std::vector<std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>> party_seeds(n_parties, 
+                                                                std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>(seeds_sz_factor));
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -74,7 +73,7 @@ std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties2(size_t n_par
     for (size_t i = 1; i < n_parties; ++i) {
         party_seeds[i - 1].resize(seeds_sz_factor);
         for (size_t j = i + 1; j < seeds_sz_factor; ++j) {
-            std::array<uint8_t, SECRET_SIZE> seed{};
+            std::array<uint8_t, RAND_SECRET_SIZE> seed{};
             for (auto& byte : seed) byte = dist(gen);
 
             party_seeds[i - 1][j - 1] = seed;
@@ -262,7 +261,7 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
 }
 
 /* Method Definitions for 'ApproximateMpsiParty' class */
-ApproximateMpsiParty::ApproximateMpsiParty(FullMesh& net, std::vector<std::array<uint8_t, 16>> seeds, size_t bin_count, size_t hash_count, std::string hash_func /*, Stats& pstats*/)
+ApproximateMpsiParty::ApproximateMpsiParty(FullMesh& net, std::vector<std::array<uint8_t, RAND_SECRET_SIZE>> seeds, size_t bin_count, size_t hash_count, std::string hash_func /*, Stats& pstats*/)
     : network(net), seeds(std::move(seeds)), bin_count(bin_count), hash_count(hash_count), hash_func(hash_func)/*, stats(pstats)*/ {}
 
 std::vector<bool> ApproximateMpsiParty::compute_query_results(
