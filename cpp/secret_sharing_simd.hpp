@@ -8,7 +8,7 @@
 #include <cstdint>
 
 // Constants
-constexpr size_t SHARE_BYTE_COUNT = 64;
+constexpr size_t SHARE_BYTE_COUNT = 40; // 64;
 
 // Helper class for SIMD-like operations
 /*class SimdBytes {

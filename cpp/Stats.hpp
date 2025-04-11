@@ -175,7 +175,7 @@ public:
         double xor_sum = 0.0, xof_sum = 0.0, bloomfilter_sum = 0.0;
         file2 << "XOR (in ms),    XOF (in ms),    BloomFilter (in ms)\n";
         for (int j=0; j<xor_exec_times.size(); j++) {
-            file <<xor_exec_times[j]<<", "<<xof_exec_times[j]<<", "<<bloomfilter_exec_times[j]<< "\n";
+            file2 <<xor_exec_times[j]<<", "<<xof_exec_times[j]<<", "<<bloomfilter_exec_times[j]<< "\n";
             xor_sum += xor_exec_times[j];
             xof_sum += xof_exec_times[j];
             bloomfilter_sum += bloomfilter_exec_times[j];

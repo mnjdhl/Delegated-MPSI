@@ -50,6 +50,7 @@ public:
     void evaluate(const std::string& experiment_name, size_t party_count,
                                 const FullMesh& network_description, size_t repetitions);
     std::vector<std::unique_ptr<Party>> setup_parties(size_t n_parties);
+    std::vector<std::unique_ptr<Party>> setup_parties2(size_t n_parties, size_t seeds_sz_factor);
 
 private:
     size_t bin_count;

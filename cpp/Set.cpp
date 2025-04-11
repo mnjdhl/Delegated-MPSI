@@ -1,6 +1,7 @@
 #include <iostream>
 #include "Set.hpp"
 #include "hash_funcs.hpp"
+#include "common.hpp"
 
 /* Method Definitions for 'Set' class */
 #if USE_BLOOM_FILTER_LIB
@@ -98,7 +99,7 @@ std::size_t Set::compute_optimal_bit_size(std::size_t n, std::size_t bin_count) 
     bit_array_size = (bit_array_size / bin_count) * bin_count;
   
     // Set an upper limit to avoid excessive memory usage
-    constexpr std::size_t MAX_BITS = 1'000'000;//10'000'000; // Example cap: 10 million bits
+    std::size_t MAX_BITS = g_options.set_size*40;  //1'000'000;//10'000'000; // Example cap: 10 million bits
     auto retvalue = std::min(bit_array_size, MAX_BITS);
 
     std::cout<<"Set::compute_optimal_bit_size: Final bit_array_size="<<bit_array_size<<", retvalue="<<retvalue<<"\n";

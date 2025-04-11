@@ -34,21 +34,47 @@ ApproximateMpsi::ApproximateMpsi(FullMesh& net, size_t minimum_bin_count, size_t
           }
 
 std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties(size_t n_parties) {
-    const size_t seeds_sz_factor = 314048;// 19628; // 314048; /* Size of the bloom filter*/
-    //std::vector<std::vector<std::array<uint8_t, 16>>> party_seeds(n_parties - 1,
-    //                                                          std::vector<std::array<uint8_t, 16>>(n_parties - 1));
+    std::vector<std::vector<std::array<uint8_t, 16>>> party_seeds(n_parties - 1,
+                                                              std::vector<std::array<uint8_t, 16>>(n_parties - 1));
+   
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint8_t> dist(0, 255);
+
+    for (size_t i = 1; i < n_parties; ++i) {
+        for (size_t j = i + 1; j < n_parties; ++j) {
+            std::array<uint8_t, 16> seed{};
+            for (auto& byte : seed) byte = dist(gen);
+
+            party_seeds[i - 1][j - 1] = seed;
+            party_seeds[j - 1][i - 1] = seed;
+        }
+    }
+
+    party_seeds.insert(party_seeds.begin(), {});
+
+    std::vector<std::unique_ptr<Party>> parties;
+    parties.reserve(n_parties);
+    for (const auto& seeds : party_seeds) {
+        parties.push_back(std::make_unique<ApproximateMpsiParty>(network, seeds, bin_count, hash_count, hash_func /*, stats*/));
+    }
+    return parties;
+}
+
+std::vector<std::unique_ptr<Party>> ApproximateMpsi::setup_parties2(size_t n_parties, size_t seeds_sz_factor) {
+    //const size_t seeds_sz_factor = 314048; /* Size of the bloom filter*/
+    constexpr size_t SECRET_SIZE = 16; //SHARE_BYTE_COUNT ~5; // 16;
     std::vector<std::vector<std::array<uint8_t, 16>>> party_seeds(n_parties, 
-                                                                std::vector<std::array<uint8_t, 16>>(seeds_sz_factor));
+                                                                std::vector<std::array<uint8_t, SECRET_SIZE>>(seeds_sz_factor));
 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint8_t> dist(0, 255);
 
     for (size_t i = 1; i < n_parties; ++i) {
-        //for (size_t j = i + 1; j < n_parties; ++j) {
         party_seeds[i - 1].resize(seeds_sz_factor);
         for (size_t j = i + 1; j < seeds_sz_factor; ++j) {
-            std::array<uint8_t, 16> seed{};
+            std::array<uint8_t, SECRET_SIZE> seed{};
             for (auto& byte : seed) byte = dist(gen);
 
             party_seeds[i - 1][j - 1] = seed;
@@ -150,7 +176,7 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
 
         // Step 3: Set up parties
         std::cout << "Setting up parties...\n";
-        auto parties = setup_parties(party_count+1);
+        auto parties = setup_parties2(party_count+1, set_size*40);
 
         // Step 4: Run protocol for all parties
         std::cout << "Running protocol for all parties...\n";
