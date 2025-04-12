@@ -134,8 +134,19 @@ SimdBytes blake3_xof(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t b
 SimdBytes do_generic_hash(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count);
 //SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector<bool>& conditions);
 SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func);
+SimdBytes create_zero_share_parellel(
+    const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds,
+    size_t byte_count,
+    std::string hash_func
+);
 
 SimdBytes conditionally_corrupt_share(
+    const SimdBytes& share,
+    const std::vector<bool>& conditions,
+    size_t chunk_size=SHARE_BYTE_COUNT  // Usually SHARE_BYTE_COUNT
+);
+
+SimdBytes conditionally_corrupt_share_parallel(
     const SimdBytes& share,
     const std::vector<bool>& conditions,
     size_t chunk_size=SHARE_BYTE_COUNT  // Usually SHARE_BYTE_COUNT

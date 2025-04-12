@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <chrono>
 #include <assert.h>
+#include <future>
+#include <numeric>
+#include <execution>  // C++17 Parallel STL (if using it optionally)
+#include <thread>
 
 #include "blake3.h" // Include BLAKE3 library for hashing
 #include "secret_sharing_simd.hpp"
@@ -217,13 +221,17 @@ SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SI
 
     auto seeds_iterator = seeds.begin();
     SimdBytes temp = do_generic_hash(*seeds_iterator, byte_count, hash_func);
-    temp.resize(sresize);  // 🔹 Resize to match 'share'
+
+    /* Increases performance if we don't resize here */
+    //temp.resize(sresize);  // 🔹 Resize to match 'share'
 
     share = temp;  // Copy the first hash result
 
     for (++seeds_iterator; seeds_iterator != seeds.end(); ++seeds_iterator) {
         SimdBytes hash_result = do_generic_hash(*seeds_iterator, byte_count, hash_func);
-        hash_result.resize(sresize);  // 🔹 Resize hash result to match 'share'
+        
+        /* Increases performance if we don't resize here */
+        //hash_result.resize(sresize);  // 🔹 Resize hash result to match 'share'
         
         share ^= hash_result;  // Now XOR will be safe
     }
@@ -233,6 +241,52 @@ SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SI
     return share;
 }
 
+SimdBytes create_zero_share_parellel(
+    const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds,
+    size_t byte_count,
+    std::string hash_func
+) {
+    const size_t seed_count = seeds.size();
+    SimdBytes share;
+    share.resize(seed_count);  // Prepare final share storage
+
+    // Step 1: Launch parallel hash computations
+    std::vector<std::future<SimdBytes>> futures;
+    futures.reserve(seed_count);
+    //for (const auto& seed : seeds) {
+    for (auto seeds_iterator = seeds.begin(); seeds_iterator != seeds.end(); ++seeds_iterator) {
+        futures.emplace_back(std::async(std::launch::async, [=]() {
+            try {
+            SimdBytes hash = do_generic_hash(*seeds_iterator, byte_count, hash_func);
+            hash.resize(seed_count);
+            return hash;
+            } catch (const std::exception& e) {
+                std::cerr << "Error in hash computation: " << e.what() << std::endl;
+                return SimdBytes();  // Return empty SimdBytes on error
+            }
+        }));
+    }
+
+    // Step 2: XOR reduce the results
+    SimdBytes result;
+    result.resize(seed_count);
+    bool first = true;
+
+    for (auto& future : futures) {
+        SimdBytes hash_result = future.get();
+
+        if (first) {
+            result = hash_result;
+            first = false;
+        } else {
+            result ^= hash_result;
+        }
+    }
+
+    std::cout << "Created zero share with " << result.to_bytes().size() << " elements (Expected: " << seed_count / 16 << ")" << std::endl;
+
+    return result;
+}
 
 #if 0
 // Conditionally Corrupt Share
@@ -284,7 +338,7 @@ SimdBytes conditionally_corrupt_share(
     size_t num_chunks = conditions.size();
     size_t total_size = share.bytes.size(); // num_chunks;// * chunk_size;
 
-    assert(share.bytes.size() == total_size && "Share size mismatch with condition mask");
+    //assert(share.bytes.size() == total_size && "Share size mismatch with condition mask");
 
     // Generate randomness
     std::vector<uint8_t> random_bytes(total_size);
@@ -295,22 +349,66 @@ SimdBytes conditionally_corrupt_share(
 
     // Create result share with corruption applied
     SimdBytes corrupted(total_size);
-    /*for (size_t chunk = 0; chunk < num_chunks; ++chunk) {
-        for (size_t i = 0; i < chunk_size; ++i) {
-            size_t idx = chunk * chunk_size + i;
-            if (conditions[chunk]) {
-                corrupted.bytes[idx] = random_bytes[idx];  // corrupt
-            } else {
-                corrupted.bytes[idx] = share.bytes[idx];   // keep original
-            }
-        }
-    }*/
-   
     for (size_t i = 0; i < total_size; ++i) {
         size_t condition_idx = i / chunk_size;
         corrupted.bytes[i] = (condition_idx < conditions.size() && conditions[condition_idx])
             ? random_bytes[i]
             : share.bytes[i];
+    }
+
+    return corrupted;
+}
+
+SimdBytes conditionally_corrupt_share_parallel(
+    const SimdBytes& share,
+    const std::vector<bool>& conditions,
+    size_t chunk_size  // Usually SHARE_BYTE_COUNT
+) {
+    const size_t total_size = share.bytes.size();
+    const size_t num_chunks = conditions.size();
+    //assert(total_size >= chunk_size * num_chunks);//Wronly put assertion
+
+    // Step 1: Generate randomness in parallel
+    std::vector<uint8_t> random_bytes(total_size);
+    {
+        std::random_device rd;
+        std::generate(random_bytes.begin(), random_bytes.end(), [&rd]() {
+            return static_cast<uint8_t>(rd() & 0xFF);
+        });
+    }
+
+    // Step 2: Define worker for a range of bytes
+    auto corrupt_worker = [&](size_t start, size_t end) -> std::vector<uint8_t> {
+        std::vector<uint8_t> segment(end - start);
+
+        for (size_t i = start; i < end; ++i) {
+            size_t condition_idx = i / chunk_size;
+            bool corrupt = (condition_idx < num_chunks && conditions[condition_idx]);
+            segment[i - start] = corrupt ? random_bytes[i] : share.bytes[i];
+        }
+
+        return segment;
+    };
+
+    // Step 3: Launch parallel workers
+    const size_t num_threads = std::thread::hardware_concurrency();
+    const size_t chunk = (total_size + num_threads - 1) / num_threads;
+
+    std::vector<std::future<std::vector<uint8_t>>> futures;
+    for (size_t t = 0; t < num_threads; ++t) {
+        size_t start = t * chunk;
+        size_t end = std::min(start + chunk, total_size);
+        if (start >= end) break;  // Avoid launching empty tasks
+        futures.emplace_back(std::async(std::launch::async, corrupt_worker, start, end));
+    }
+
+    // Step 4: Combine all results
+    SimdBytes corrupted;
+    corrupted.bytes.reserve(total_size);
+
+    for (auto& fut : futures) {
+        std::vector<uint8_t> part = fut.get();
+        corrupted.bytes.insert(corrupted.bytes.end(), part.begin(), part.end());
     }
 
     return corrupted;

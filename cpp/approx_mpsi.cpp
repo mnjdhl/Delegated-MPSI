@@ -180,7 +180,8 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
         // Step 4: Run protocol for all parties
         std::cout << "Running protocol for all parties...\n";
         //std::vector<std::optional<Set>> outputs;
-        std::vector<thread_data*> outputs;
+        //std::vector<thread_data*> outputs;
+        std::vector<std::unique_ptr<thread_data>> outputs;
         std::vector<std::optional<Set>> v_outputs;
         outputs.reserve(parties.size());
 
@@ -203,20 +204,26 @@ void ApproximateMpsi::evaluate(const std::string& experiment_name, size_t party_
             /*threads.emplace_back([&parties, &id, &party_count, &inputs, &network, &promises]() {
                 promises[id].set_value(parties[id]->run(id, party_count, inputs[id], network.get_channels(id)));
             });*/
-            thread_data *th_data = new thread_data;
+            //thread_data *th_data = new thread_data;
+            std::unique_ptr<thread_data> th_data = std::make_unique<thread_data>();
             th_data->id = id;
             th_data->is_completed = false;
             th_data->output = std::nullopt;
-            outputs.push_back(th_data);
+            //outputs.push_back(th_data);
+            outputs.push_back(std::move(th_data)); // now only 'outputs.back()' owns it
+            thread_data* th_data_ptr = outputs.back().get(); // raw pointer is safe here 
             //auto out = parties[id]->run(id, party_count, inputs[id], network.get_channels(id), th_data);
             std::cout<<"ApproximateMpsi::evaluate():Running (1) party id ="<<id<<", party count ="<<party_count<<"\n";
-    
-            threads.emplace_back([&parties, &party_count, &inputs, &network, th_data]() {
-                //th_data->output = 
+            /*threads.emplace_back([&parties, &party_count, &inputs, &network, th_data]() {
                 auto p_id = th_data->id;
                 std::cout<<"ApproximateMpsi::evaluate():Running (2) party id ="<<p_id<<", party count ="<<party_count<<"\n";
                 parties[p_id]->run(p_id, party_count, *inputs[p_id], network.get_channels(p_id), th_data);
-                //th_data->is_completed = true;
+            });*/
+            
+            threads.emplace_back([&, th_data_ptr /*th_data = std::move(th_data)*/]() mutable {
+                auto p_id = th_data_ptr->id;
+                std::cout<<"ApproximateMpsi::evaluate():Running (2) party id ="<<p_id<<", party count ="<<party_count<<"\n";
+                parties[p_id]->run(p_id, party_count, inputs[p_id], network.get_channels(p_id), th_data_ptr /*th_data.get()*/);
             });
             //auto end_time = std::chrono::steady_clock::now();
             //stats.log_duration(Stats::OPS::COMPUTE_BREAKDOWN, id, start_time, end_time);
@@ -397,27 +404,41 @@ Set ApproximateMpsiParty::run_querier_approx(size_t id, const Set& input, Channe
 }
 
 void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channels& channels) {
-    auto start_time = std::chrono::steady_clock::now();
+    
 
     // Encode input into a Bloom filter
-    std::vector<bool> bloom_filter = input.to_bloom_filter(bin_count, hash_count, hash_func);//Xi
-    std::cout<<"ApproximateMpsiParty::run_client_approx(): bloom filter size="<<bloom_filter.size()<<"\n";
-    auto end_time = std::chrono::steady_clock::now();
-    g_stats.log_duration(Stats::OPS::BLOOMFILTER_OP, id, start_time, end_time);
+    std::vector<bool> bloom_filter;
+    //bool bloom_done = false;
+    //Running as lambda function for bloom filter
+    std::thread bloom_thread([&bloom_filter, /*&bloom_done,*/ &input, this, id]() {
+        auto start_time = std::chrono::steady_clock::now();
+        bloom_filter = input.to_bloom_filter(this->bin_count, this->hash_count, this->hash_func);//Xi
+        std::cout<<"ApproximateMpsiParty::run_client_approx(): bloom filter size="<<bloom_filter.size()<<"\n";
+        auto end_time = std::chrono::steady_clock::now();
+        g_stats.log_duration(Stats::OPS::BLOOMFILTER_OP, id, start_time, end_time);
+       // bloom_done = true;
+   });
 
-    start_time = std::chrono::steady_clock::now();
+    auto start_time = std::chrono::steady_clock::now();
     // Generate a zero share and corrupt it conditionally
     SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);//Mi
+    //SimdBytes share = create_zero_share_parellel(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);
     std::cout << "Bloom Filter Size: " << bloom_filter.size()
           << ", bin_count: " << bin_count
           << ", Seeds size: " << seeds.size()
           << ", Expected false_values.bytes.size(): " << share.to_bytes().size()
           << std::endl;
-    SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);//Ri
+    // Wait for bloom filter to be ready
+    bloom_thread.join();
+    /*while (!bloom_done) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }*/
 
+    //SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);//Ri
+    SimdBytes corrupted_share = conditionally_corrupt_share_parallel(share, bloom_filter);
     std::cout<<"ApproximateMpsiParty::run_client_approx(): share size="<<share.to_bytes().size()<<", corrupted share size="<<corrupted_share.to_bytes().size()<<"\n";
     // Log execution time
-    end_time = std::chrono::steady_clock::now();
+    auto end_time = std::chrono::steady_clock::now();
     g_stats.log_duration(Stats::OPS::XOF_OP, id, start_time, end_time);
 
     // Send the share to the server
@@ -445,11 +466,11 @@ std::optional<Set> ApproximateMpsiParty::run(size_t id, size_t n_parties, const 
             break;
         
     }
+    auto end_time = std::chrono::steady_clock::now();
+    g_stats.log_duration(Stats::OPS::COMPUTE_BREAKDOWN, id, start_time, end_time);
     t_data->id = id;
     t_data->output = output;
     t_data->is_completed = true;
-    auto end_time = std::chrono::steady_clock::now();
-    g_stats.log_duration(Stats::OPS::COMPUTE_BREAKDOWN, id, start_time, end_time);
     return output;
 }
 
