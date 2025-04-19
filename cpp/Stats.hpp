@@ -7,6 +7,11 @@
 #include <filesystem>
 #include "common.hpp"
 
+struct msg_complexity {
+    size_t msg_cnt;
+    size_t msg_size;
+};
+
 class Stats {
 private:
     std::vector<double> execution_times;
@@ -25,6 +30,7 @@ private:
     std::vector<double> xof_exec_times;
     std::vector<double> bloomfilter_exec_times;
     std::map<int, double>compute_breakdown_times;
+    std::map<int, struct msg_complexity> msg_complexities;
 
 public:
     enum OPS {
@@ -33,6 +39,7 @@ public:
         BLOOMFILTER_OP,
         COMPUTE_BREAKDOWN,
         COMPUTE_BREAKDOWN_WAITTIME,
+        COMPUTE_MSG_COMPLEXITY
     };
 
     ~Stats() {
@@ -134,7 +141,7 @@ public:
 
         if (compute_breakdown_times.size() > 0) {
             if (std::filesystem::file_size(fpath) <= 0) {
-                file<<"Set Size, Party Count, Hash Count, Server Side (s), Query Servers (s), Clients (s)\n";
+                file<<"Set Size, Party Count, Hash Count, Server Side (s), Query Servers (s), Clients (s), Query Servers Message Count, Query Servers Message Size, Client Message Count, Client Message Size\n";
             }
             file<<g_options.set_size<<", "<<g_options.party_count<<", ";
             file<<g_options.hash_count<<", ";
@@ -144,11 +151,17 @@ public:
             file<<(compute_breakdown_times[0]/g_options.repetitions)/1000<<", ";
             file<<(compute_breakdown_times[1]/g_options.repetitions)/1000<<", ";
             if (tot_clients <= 0) {
-                file<<0<<"\n";
+                file<<0<<", ";
             } else {
-                file<<((compute_breakdown_times[2]/g_options.repetitions)/1000)/tot_clients<<"\n";
+                file<<((compute_breakdown_times[2]/g_options.repetitions)/1000)/tot_clients<<", ";
             }
-
+            //file <<msg_complexities[0].msg_cnt<<", "<<msg_complexities[0].msg_size<<", ";
+            file <<msg_complexities[1].msg_cnt/g_options.repetitions<<", "<<msg_complexities[1].msg_size/g_options.repetitions<<", ";
+            if (tot_clients <= 0) {
+                file<<0<<", ";
+            } else {
+                file <<(msg_complexities[2].msg_cnt/g_options.repetitions)/tot_clients<<", "<<(msg_complexities[2].msg_size/g_options.repetitions)/tot_clients<<"\n";
+            }
             //return;
         }
 
@@ -270,7 +283,23 @@ public:
                     compute_breakdown_times[2] -=duration;
                 }
                 break;
+            
         }
+    }
+    void log_msg_complexity(int party_id, size_t msg_cnt, size_t msg_size) {
+        if (!g_options.stats) {
+            return;
+        }
+        auto mparty_id = party_id;
+        if (mparty_id >= 2) {
+            mparty_id = 2;
+        } 
+
+        if (msg_complexities.find(mparty_id) == msg_complexities.end()) {
+            msg_complexities[mparty_id] = msg_complexity();
+        }
+        msg_complexities[mparty_id].msg_cnt += msg_cnt;
+        msg_complexities[mparty_id].msg_size += msg_size;
     }
 };
 

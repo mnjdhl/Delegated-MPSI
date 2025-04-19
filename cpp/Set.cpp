@@ -2,6 +2,7 @@
 #include "Set.hpp"
 #include "hash_funcs.hpp"
 #include "common.hpp"
+#include "secret_sharing_simd.hpp"
 
 /* Method Definitions for 'Set' class */
 #if USE_BLOOM_FILTER_LIB
@@ -197,6 +198,10 @@ std::vector<std::vector<size_t>> Set::bloom_filter_indices(size_t bin_count, siz
 
 std::vector<bool> Set::to_bloom_filter(size_t bin_count, size_t hash_count, std::string hash_func) const {
     std::size_t bit_array_size = compute_optimal_bit_size(elements.size(), bin_count);
+    if (bit_array_size% SHARE_BYTE_COUNT != 0) {
+        bit_array_size += (SHARE_BYTE_COUNT - (bit_array_size % SHARE_BYTE_COUNT)); // Align to SHARE_BYTE_COUNT
+    }
+ 
     std::vector<bool> bit_array(bit_array_size, false);  // Bit array initialized with false
 
     for (const auto& element : elements) {

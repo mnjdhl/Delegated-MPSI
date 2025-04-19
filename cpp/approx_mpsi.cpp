@@ -408,7 +408,6 @@ void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channe
 
     // Encode input into a Bloom filter
     std::vector<bool> bloom_filter;
-    //bool bloom_done = false;
     //Running as lambda function for bloom filter
     std::thread bloom_thread([&bloom_filter, /*&bloom_done,*/ &input, this, id]() {
         auto start_time = std::chrono::steady_clock::now();
@@ -416,13 +415,14 @@ void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channe
         std::cout<<"ApproximateMpsiParty::run_client_approx(): bloom filter size="<<bloom_filter.size()<<"\n";
         auto end_time = std::chrono::steady_clock::now();
         g_stats.log_duration(Stats::OPS::BLOOMFILTER_OP, id, start_time, end_time);
-       // bloom_done = true;
    });
 
     auto start_time = std::chrono::steady_clock::now();
     // Generate a zero share and corrupt it conditionally
-    SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);//Mi
-    //SimdBytes share = create_zero_share_parellel(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);
+    //SimdBytes share = create_zero_share(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);//Mi
+    SimdBytes share = create_zero_share_no_resize(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);//Mi //g_options.set_size
+    //SimdBytes share = create_zero_share_parallel(seeds, SHARE_BYTE_COUNT * bin_count, hash_func);//Mi
+    //SimdBytes share = create_zero_share_parallel(seeds, g_options.set_size, hash_func);
     std::cout << "Bloom Filter Size: " << bloom_filter.size()
           << ", bin_count: " << bin_count
           << ", Seeds size: " << seeds.size()
@@ -430,9 +430,6 @@ void ApproximateMpsiParty::run_client_approx(size_t id, const Set& input, Channe
           << std::endl;
     // Wait for bloom filter to be ready
     bloom_thread.join();
-    /*while (!bloom_done) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }*/
 
     //SimdBytes corrupted_share = conditionally_corrupt_share(share, bloom_filter);//Ri
     SimdBytes corrupted_share = conditionally_corrupt_share_parallel(share, bloom_filter);

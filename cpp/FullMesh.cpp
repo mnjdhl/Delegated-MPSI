@@ -123,6 +123,7 @@ std::vector<uint8_t> FullMesh::receive(size_t receiver_id, size_t sender_id) {
 
     std::vector<uint8_t> message = queue.front();
     queue.pop();
+    g_stats.log_msg_complexity(sender_id, 1, message.size()); // Log message complexity
     return message;
 }
 

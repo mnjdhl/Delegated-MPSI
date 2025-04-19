@@ -6,6 +6,7 @@
 #include <vector>
 #include <array>
 #include <cstdint>
+#include <algorithm>
 
 // Constants
 constexpr size_t SHARE_BYTE_COUNT = 40; // 64;
@@ -89,6 +90,7 @@ class SimdBytes {
     SimdBytes() = default;
 
     SimdBytes(size_t byte_count);
+    SimdBytes(size_t byte_count, uint8_t value);
 
     void resize(size_t byte_count);
 
@@ -133,8 +135,11 @@ class SimdBytes {
 SimdBytes blake3_xof(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count);
 SimdBytes do_generic_hash(const std::array<uint8_t, RAND_SECRET_SIZE>& seed, size_t byte_count);
 //SimdBytes conditionally_corrupt_share( const SimdBytes& share, const std::vector<bool>& conditions);
+
+SimdBytes create_zero_share_no_resize(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func);
 SimdBytes create_zero_share(const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds, size_t byte_count, std::string hash_func);
-SimdBytes create_zero_share_parellel(
+
+SimdBytes create_zero_share_parallel(
     const std::vector<std::array<uint8_t, RAND_SECRET_SIZE>>& seeds,
     size_t byte_count,
     std::string hash_func
