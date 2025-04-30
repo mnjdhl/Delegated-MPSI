@@ -91,16 +91,17 @@ std::unordered_set<size_t> Set::get_elements() const {
 }*/
 
 std::size_t Set::compute_optimal_bit_size(std::size_t n, std::size_t bin_count) const {
-    double bits_per_element = -(std::log(epsilon) / (std::log(2) * std::log(2))); 
+    double bits_per_element = 14.3779296875; // -(std::log(epsilon) / (std::log(2) * std::log(2))); 
     std::size_t bit_array_size = static_cast<std::size_t>(std::ceil(n * bits_per_element));
 
-    std::cout<<"Set::compute_optimal_bit_size: bits_per_element = " <<bits_per_element<<", bit_array_size="<<bit_array_size<<"\n";
+    std::cout<<"Set::compute_optimal_bit_size: elements size = "<<n<<", bits_per_element = " <<bits_per_element<<", bit_array_size="<<bit_array_size<<"\n";
   
     // Normalize the bit array size based on bin count
-    bit_array_size = (bit_array_size / bin_count) * bin_count;
+    //bit_array_size = (bit_array_size / bin_count) * bin_count;
   
+    bit_array_size = bit_array_size * 40;
     // Set an upper limit to avoid excessive memory usage
-    std::size_t MAX_BITS = g_options.set_size*40;  //1'000'000;//10'000'000; // Example cap: 10 million bits
+    std::size_t MAX_BITS = 100'000'000; // g_options.set_size*40;  //1'000'000;//10'000'000; // Example cap: 10 million bits
     auto retvalue = std::min(bit_array_size, MAX_BITS);
 
     std::cout<<"Set::compute_optimal_bit_size: Final bit_array_size="<<bit_array_size<<", retvalue="<<retvalue<<"\n";

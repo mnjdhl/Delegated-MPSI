@@ -63,6 +63,16 @@ std::vector<uint8_t> blake2b_512(const uint8_t* seed, size_t byte_count) {
 - Arbitrary-length hashes (e.g., 64 bytes, 128 bytes, etc.)
 - More flexible than fixed-length SHA-3.
 */
+std::vector<uint8_t> shake128_xof_varlen(const uint8_t* seed, size_t byte_count, size_t output_len = 64) {
+    std::vector<uint8_t> hash(output_len);
+    EVP_Digest(seed, byte_count, hash.data(), nullptr, EVP_shake128(), nullptr);
+    return hash;
+}
+
+std::vector<uint8_t> shake128_xof_len64(const uint8_t* seed, size_t byte_count) {
+    return shake128_xof_varlen(seed, byte_count);
+}
+
 std::vector<uint8_t> shake256_xof_varlen(const uint8_t* seed, size_t byte_count, size_t output_len = 64) {
     std::vector<uint8_t> hash(output_len);
     EVP_Digest(seed, byte_count, hash.data(), nullptr, EVP_shake256(), nullptr);
@@ -138,6 +148,7 @@ std::map<std::string, hash_function_t> hash_functions = {
     {"sha512", sha512}, //Use this
     {"sha3_512", sha3_512}, //Use this
     {"blake2b_512", blake2b_512}, //Use this
+    {"shake128_xof", shake128_xof_len64}, //Use this
     {"shake256_xof", shake256_xof_len64}, //Use this
     {"blake3_xof", blake3_xof} //Use this
 };

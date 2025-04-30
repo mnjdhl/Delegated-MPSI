@@ -2,11 +2,12 @@
 export LD_LIBRARY_PATH=/usr/bin/lib/:$LD_LIBRARY_PATH
 BinCount=5
 HashCounts=(1 2 5 10)
-HashCount=${HashCounts[2]}
+HashCount=${HashCounts[3]}
 Latencies=(1 10 100 1000) # ms
 Latency=${Latencies[2]}
 OneMB=1000000 # Bytes per second
-Bandwidths=(10000 100000 $OneMB $((10 * OneMB)) $((100 * OneMB)) $((1000 * OneMB)))
+#Bandwidths=(10000 100000 $OneMB $((10 * OneMB)) $((100 * OneMB)) $((1000 * OneMB)))
+Bandwidths=($OneMB $((10 * OneMB)) $((100 * OneMB)) $((1000 * OneMB)))
 BytesPerSec=${Bandwidths[2]}
 Repetitions=5
 file_id=$(date +%Y%m%d_%H%M)
@@ -18,15 +19,15 @@ HashFunc=${HashFuncs[4]}
 if [ -f $FileName ] ; then
     rm $FileName
 fi
-SetSize=${SetSizes[3]}
+SetSize=${SetSizes[2]}
 #SetSize=${SetSizes[0]}
 #SetSize=${SetSizes[4]}
 #PartyCount=20
 #PartyCount=4
-PartyCount=8
+PartyCount=10
 DomainSize=$((SetSize + 1))
 output_file="MileStone5_Fig3_bandwidth_vs_latency_$file_id.txt"
-pc=$((PartyCount + 2))
+pc=$((PartyCount + 1))
 echo "Running for Set Size=$SetSize, Party Count=$pc, Hash Count=$HashCount, Hash Function=$HashFunc and Repetitions=$Repetitions">>$output_file
 echo "Latency (ms),Bandwidth (Bytes/sec),Time (s)" >> $output_file
 
